@@ -57,20 +57,29 @@ chunks are a worse extraction source than full documents); and it never
 overwrites an existing key, so re-ingesting a folder — or a human correcting
 a bad extraction — can never be silently clobbered by a later run.
 
-**Direct document upload uses Vercel Blob, not a route handler body.**
-`app/deals/[id]/DealDocumentUpload.tsx` uploads straight from the browser to
-Vercel Blob (`@vercel/blob/client`'s `upload()`), authorized by a short-lived
-token from `app/api/deals/[id]/documents/upload-url/route.ts`. This is
-deliberate, not incidental: Vercel serverless functions cap request bodies
-at 4.5MB, and OMs/rent rolls routinely exceed that. Once the blob is stored,
-the client makes a second call to `app/api/deals/[id]/documents/route.ts`,
-which downloads it server-side and runs it through the same
+**Direct document upload goes through our own API route, capped at
+4.5MB.** `app/deals/[id]/DealDocumentUpload.tsx` posts the file as
+`FormData` to `app/api/deals/[id]/documents/route.ts`, which uploads it to
+Vercel Blob server-side (`put()`) and immediately runs it through the same
 extract → chunk → embed → write → extract-attributes pipeline as
-`scripts/ingest.ts` (both now call the shared `lib/documents.ts`). The
-Drive-file-identity columns (`drive_file_id`, `drive_modified_time`) are
-reused for uploaded files too — an uploaded file's Blob pathname stands in
-for a Drive file ID, since both are just "how do I dedup/re-sync this
-specific source file" identities; see schema.sql.
+`scripts/ingest.ts` (both now call the shared `lib/documents.ts`). This
+was **not** the first design: the first attempt used Vercel Blob's
+client-side token-exchange flow (`@vercel/blob/client`'s `upload()`,
+uploading straight from the browser to bypass Vercel's 4.5MB serverless
+body limit for large OMs). That flow hit a reproducible `Headers.append:
+... is an invalid header value` failure inside `@vercel/blob` itself
+(confirmed in both Node and a real headless-Chromium run against
+production — not an environment artifact), with no clear root cause found
+after fairly deep investigation (traced into the SDK's bundled source).
+Rather than keep chasing an unexplained SDK bug, the route was simplified
+to the server-side path — no token exchange, no cross-origin upload
+complexity, much smaller surface area, at the cost of the 4.5MB ceiling.
+Revisit the client-upload approach (or presigned URLs) if that ceiling
+becomes a real problem. The Drive-file-identity columns (`drive_file_id`,
+`drive_modified_time`) are reused for uploaded files too — an uploaded
+file's Blob pathname stands in for a Drive file ID, since both are just
+"how do I dedup/re-sync this specific source file" identities; see
+schema.sql.
 
 ## Setup
 
@@ -96,10 +105,11 @@ specific source file" identities; see schema.sql.
 ## Uploading documents
 
 The deal workspace page (`/deals/[id]`) has a file picker — pick a PDF,
-Word doc, or plain text file and it's uploaded, extracted, chunked,
-embedded, indexed, and run through attribute extraction automatically.
-This is the normal path for one-off documents. See the architecture note
-above for how it avoids Vercel's 4.5MB request body limit.
+Word doc, or plain text file (up to 4.5MB) and it's uploaded, extracted,
+chunked, embedded, indexed, and run through attribute extraction
+automatically. This is the normal path for one-off documents. For anything
+larger, use the Google Drive bulk path below — see the architecture note
+above for why there's a size ceiling here at all.
 
 ## Bulk ingestion from Google Drive
 

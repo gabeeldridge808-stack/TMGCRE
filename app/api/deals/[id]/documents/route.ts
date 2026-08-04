@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 import { query } from "@/lib/db";
 import { processUploadedDocument } from "@/lib/documents";
 
@@ -26,34 +27,40 @@ export async function GET(
   return NextResponse.json(files);
 }
 
+// Upload goes through this server route (not a direct-to-Blob client token
+// exchange — see README) and so inherits Vercel's 4.5MB request body limit.
+// Traded a size ceiling for a much simpler, more reliable path: no token
+// exchange, no cross-origin browser upload complexity.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: dealId } = await params;
-  const body = await req.json();
-  const { blobUrl, pathname, filename, mimeType } = body;
-
-  if (!blobUrl || !pathname || !filename || !mimeType) {
-    return NextResponse.json(
-      { error: "blobUrl, pathname, filename, and mimeType are required" },
-      { status: 400 }
-    );
-  }
 
   const [deal] = await query<Deal>(`select asset_class from deals where id = $1`, [dealId]);
   if (!deal) {
     return NextResponse.json({ error: "deal not found" }, { status: 404 });
   }
 
+  const formData = await req.formData();
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "file is required" }, { status: 400 });
+  }
+
   try {
+    const blob = await put(`deals/${dealId}/${file.name}`, file, {
+      access: "public",
+      addRandomSuffix: true,
+    });
+
     const result = await processUploadedDocument({
       dealId,
       assetClass: deal.asset_class,
-      blobUrl,
-      pathname,
-      filename,
-      mimeType,
+      blobUrl: blob.url,
+      pathname: blob.pathname,
+      filename: file.name,
+      mimeType: file.type,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

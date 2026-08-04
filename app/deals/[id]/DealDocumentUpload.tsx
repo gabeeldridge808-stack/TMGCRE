@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { upload } from "@vercel/blob/client";
 import { UPLOADABLE_MIME_TYPES } from "@/lib/dealConstants";
 
 interface UploadResult {
@@ -11,8 +10,12 @@ interface UploadResult {
   warning?: string;
 }
 
+// Matches Vercel's serverless request body limit — this upload goes through
+// our own API route, not a direct-to-Blob client upload (see README).
+const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
+
 export default function DealDocumentUpload({ dealId }: { dealId: string }) {
-  const [status, setStatus] = useState<"idle" | "uploading" | "processing">("idle");
+  const [status, setStatus] = useState<"idle" | "processing">("idle");
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<UploadResult[]>([]);
 
@@ -20,23 +23,21 @@ export default function DealDocumentUpload({ dealId }: { dealId: string }) {
     setError(null);
 
     for (const file of Array.from(files)) {
-      try {
-        setStatus("uploading");
-        const blob = await upload(`deals/${dealId}/${file.name}`, file, {
-          access: "public",
-          handleUploadUrl: `/api/deals/${dealId}/documents/upload-url`,
-        });
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(
+          `${file.name} is too large (${(file.size / 1024 / 1024).toFixed(1)}MB) — the upload limit is 4.5MB. For bigger files, use the Google Drive bulk-ingest path (see below).`
+        );
+        continue;
+      }
 
+      try {
         setStatus("processing");
+        const formData = new FormData();
+        formData.append("file", file);
+
         const res = await fetch(`/api/deals/${dealId}/documents`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            blobUrl: blob.url,
-            pathname: blob.pathname,
-            filename: file.name,
-            mimeType: file.type,
-          }),
+          body: formData,
         });
 
         const data = await res.json();
@@ -66,10 +67,11 @@ export default function DealDocumentUpload({ dealId }: { dealId: string }) {
           }
         }}
       />
-      <p style={{ color: "#999", fontSize: 13, marginTop: 4 }}>PDF, Word (.docx), or plain text.</p>
+      <p style={{ color: "#999", fontSize: 13, marginTop: 4 }}>
+        PDF, Word (.docx), or plain text. Max 4.5MB per file.
+      </p>
 
-      {status === "uploading" && <p>Uploading…</p>}
-      {status === "processing" && <p>Extracting and indexing…</p>}
+      {status === "processing" && <p>Uploading and indexing…</p>}
       {error && <p style={{ color: "#b00020" }}>{error}</p>}
 
       {results.length > 0 && (
