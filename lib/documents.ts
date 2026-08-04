@@ -97,15 +97,18 @@ export interface ProcessUploadResult {
 }
 
 /**
- * End-to-end handling for one directly-uploaded file: download from Blob,
- * extract, write chunks, then run the same attribute-extraction pass
- * ingest.ts runs (see lib/extractAttributes.ts) so uploads and Drive
- * ingestion behave identically once text is in hand.
+ * End-to-end handling for one directly-uploaded file: extract, write
+ * chunks, then run the same attribute-extraction pass ingest.ts runs (see
+ * lib/extractAttributes.ts) so uploads and Drive ingestion behave
+ * identically once text is in hand. Takes the file's bytes directly rather
+ * than re-fetching them from Blob storage — the caller already has them in
+ * memory from the upload request, and the store is private, so a plain
+ * unauthenticated fetch of the blob URL wouldn't work anyway.
  */
 export async function processUploadedDocument(params: {
   dealId: string;
   assetClass: string;
-  blobUrl: string;
+  buffer: Buffer;
   pathname: string;
   filename: string;
   mimeType: string;
@@ -114,12 +117,7 @@ export async function processUploadedDocument(params: {
     throw new Error(`Unsupported file type (${params.mimeType}). Supported: PDF, Word (.docx), plain text.`);
   }
 
-  const res = await fetch(params.blobUrl);
-  if (!res.ok) {
-    throw new Error(`Couldn't download the uploaded file (HTTP ${res.status}).`);
-  }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  const pages = await extractText(buffer, params.mimeType);
+  const pages = await extractText(params.buffer, params.mimeType);
 
   if (pages.length === 0) {
     return {

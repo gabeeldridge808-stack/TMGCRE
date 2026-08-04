@@ -49,15 +49,22 @@ export async function POST(
   }
 
   try {
-    const blob = await put(`deals/${dealId}/${file.name}`, file, {
-      access: "public",
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // access: "private" — the Blob store is provisioned private-only; a
+    // "public" request is rejected outright. Text extraction below reads
+    // `buffer` directly rather than fetching this URL back, so the store's
+    // access mode doesn't affect anything except this upload call.
+    const blob = await put(`deals/${dealId}/${file.name}`, buffer, {
+      access: "private",
       addRandomSuffix: true,
+      contentType: file.type,
     });
 
     const result = await processUploadedDocument({
       dealId,
       assetClass: deal.asset_class,
-      blobUrl: blob.url,
+      buffer,
       pathname: blob.pathname,
       filename: file.name,
       mimeType: file.type,
