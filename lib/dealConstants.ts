@@ -10,3 +10,16 @@ export type Stage = (typeof STAGES)[number];
 export function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+// Mime types the direct-upload pipeline (lib/documents.ts) can extract text
+// from. Client-safe (no Node-only deps) so both the upload UI's `accept`
+// attribute and the server-side extractor validate against the same list.
+// Google Docs aren't here — that mime type only ever appears via the Drive
+// ingest path (lib/gdrive.ts), never from a browser file picker.
+export const DOCUMENT_MIME_TYPES = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  txt: "text/plain",
+} as const;
+
+export const UPLOADABLE_MIME_TYPES = Object.values(DOCUMENT_MIME_TYPES);

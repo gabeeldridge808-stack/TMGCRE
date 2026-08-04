@@ -57,6 +57,21 @@ chunks are a worse extraction source than full documents); and it never
 overwrites an existing key, so re-ingesting a folder — or a human correcting
 a bad extraction — can never be silently clobbered by a later run.
 
+**Direct document upload uses Vercel Blob, not a route handler body.**
+`app/deals/[id]/DealDocumentUpload.tsx` uploads straight from the browser to
+Vercel Blob (`@vercel/blob/client`'s `upload()`), authorized by a short-lived
+token from `app/api/deals/[id]/documents/upload-url/route.ts`. This is
+deliberate, not incidental: Vercel serverless functions cap request bodies
+at 4.5MB, and OMs/rent rolls routinely exceed that. Once the blob is stored,
+the client makes a second call to `app/api/deals/[id]/documents/route.ts`,
+which downloads it server-side and runs it through the same
+extract → chunk → embed → write → extract-attributes pipeline as
+`scripts/ingest.ts` (both now call the shared `lib/documents.ts`). The
+Drive-file-identity columns (`drive_file_id`, `drive_modified_time`) are
+reused for uploaded files too — an uploaded file's Blob pathname stands in
+for a Drive file ID, since both are just "how do I dedup/re-sync this
+specific source file" identities; see schema.sql.
+
 ## Setup
 
 1. Copy `.env.local.example` to `.env.local` and fill in:
@@ -70,11 +85,23 @@ a bad extraction — can never be silently clobbered by a later run.
    - `ANTHROPIC_API_KEY` — from the
      [Anthropic Console](https://console.anthropic.com/settings/keys). Powers
      the "Ask the deal" chat on each deal's workspace page.
+   - `BLOB_READ_WRITE_TOKEN` — create a Blob store in the Vercel dashboard
+     (Project > Storage > Create Database > Blob) and this is added to your
+     project automatically; pull it locally with `vercel env pull`. Powers
+     direct document upload on each deal's workspace page.
 2. `npm install`
 3. Run `schema.sql` against your database (e.g. `psql $DATABASE_URL -f schema.sql`).
 4. `npm run dev` — portfolio index at `/`, deal workspace at `/deals/[id]`.
 
-## Ingesting documents
+## Uploading documents
+
+The deal workspace page (`/deals/[id]`) has a file picker — pick a PDF,
+Word doc, or plain text file and it's uploaded, extracted, chunked,
+embedded, indexed, and run through attribute extraction automatically.
+This is the normal path for one-off documents. See the architecture note
+above for how it avoids Vercel's 4.5MB request body limit.
+
+## Bulk ingestion from Google Drive
 
 ```
 npm run ingest -- --deal-id <uuid> --drive-folder-id <folder-id> --dry-run
@@ -126,11 +153,13 @@ account/config work on your side; none of it can be done from this repo:
    > Settings > Environment Variables) — the same four from
    `.env.local.example`:
    - `DATABASE_URL` (required for the app to do anything at all)
-   - `ANTHROPIC_API_KEY` (required for the "Ask the deal" chat)
-   - `VOYAGE_API_KEY` (required for `npm run ingest` — that script runs
-     locally/wherever you invoke it, not on Vercel, but it writes to the
-     same production database, so it needs the same `DATABASE_URL`)
-   - `GOOGLE_SERVICE_ACCOUNT_KEY` (also only needed for `npm run ingest`)
+   - `ANTHROPIC_API_KEY` (required for the "Ask the deal" chat and for
+     attribute extraction on upload)
+   - `BLOB_READ_WRITE_TOKEN` (required for the in-app document upload
+     button — auto-added once you create a Blob store, see Setup below)
+   - `VOYAGE_API_KEY` (required for document upload/ingestion — embeddings)
+   - `GOOGLE_SERVICE_ACCOUNT_KEY` (only needed for `npm run ingest`, the
+     Drive-based bulk path — not the in-app upload button)
 4. **Redeploy** after setting env vars — Vercel doesn't hot-reload them
    into a running deployment.
 

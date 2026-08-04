@@ -1,5 +1,6 @@
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
+import { DOCUMENT_MIME_TYPES } from "@/lib/dealConstants";
 
 export interface ExtractedPage {
   /** 1-indexed page number. Only populated for PDFs — docx/plain text have
@@ -8,15 +9,11 @@ export interface ExtractedPage {
   text: string;
 }
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
 
 export const SUPPORTED_MIME_TYPES = new Set([
-  "application/pdf",
-  DOCX_MIME,
-  GOOGLE_DOC_MIME,
-  "text/plain", // Google Docs are exported to this before reaching here
+  ...Object.values(DOCUMENT_MIME_TYPES),
+  GOOGLE_DOC_MIME, // Google Docs are exported to text/plain before reaching here; this is the source mime type from Drive
 ]);
 
 /**
@@ -57,13 +54,13 @@ async function extractDocx(buffer: Buffer): Promise<ExtractedPage[]> {
  * SUPPORTED_MIME_TYPES first to skip those with a clear reason instead.
  */
 export async function extractText(buffer: Buffer, mimeType: string): Promise<ExtractedPage[]> {
-  if (mimeType === "application/pdf") {
+  if (mimeType === DOCUMENT_MIME_TYPES.pdf) {
     return extractPdf(buffer);
   }
-  if (mimeType === DOCX_MIME) {
+  if (mimeType === DOCUMENT_MIME_TYPES.docx) {
     return extractDocx(buffer);
   }
-  if (mimeType === "text/plain") {
+  if (mimeType === DOCUMENT_MIME_TYPES.txt) {
     const text = buffer.toString("utf-8");
     return text.trim() ? [{ pageNumber: null, text }] : [];
   }

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
 import DealChat from "./DealChat";
+import DealDocumentUpload from "./DealDocumentUpload";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,11 @@ interface Deal {
 interface DealAttribute {
   key: string;
   value: unknown;
+}
+
+interface DocumentFile {
+  source_filename: string;
+  chunk_count: string;
 }
 
 export default async function DealWorkspacePage({
@@ -34,12 +40,11 @@ export default async function DealWorkspacePage({
     [id]
   );
 
-  const [{ chunk_count, file_count }] = await query<{
-    chunk_count: string;
-    file_count: string;
-  }>(
-    `select count(*) as chunk_count, count(distinct drive_file_id) as file_count
-     from documents where deal_id = $1`,
+  const files = await query<DocumentFile>(
+    `select source_filename, count(*) as chunk_count
+     from documents where deal_id = $1
+     group by source_filename
+     order by max(ingested_at) desc`,
     [id]
   );
 
@@ -68,13 +73,23 @@ export default async function DealWorkspacePage({
       )}
 
       <h2>Documents</h2>
-      <p>
-        {file_count} file(s) ingested, {chunk_count} indexed chunk(s).
-      </p>
-      <p style={{ color: "#666" }}>
-        Run <code>npm run ingest -- --deal-id {deal.id} --drive-folder-id &lt;folder-id&gt;</code> to
-        ingest documents for this deal, or <code>npm run search -- --deal-id {deal.id} --query &quot;...&quot;</code>{" "}
-        to test retrieval.
+      <DealDocumentUpload dealId={deal.id} />
+
+      {files.length === 0 ? (
+        <p style={{ color: "#666", marginTop: 12 }}>No documents uploaded yet.</p>
+      ) : (
+        <ul style={{ marginTop: 12 }}>
+          {files.map((f) => (
+            <li key={f.source_filename}>
+              {f.source_filename} — {f.chunk_count} chunk(s)
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p style={{ color: "#999", fontSize: 13, marginTop: 12 }}>
+        For bulk loading from a Google Drive folder instead, see{" "}
+        <code>npm run ingest -- --deal-id {deal.id} --drive-folder-id &lt;folder-id&gt;</code>.
       </p>
 
       <DealChat dealId={deal.id} />

@@ -8,13 +8,11 @@
 // etc.) before spending API calls or touching the database.
 
 import "dotenv/config";
-import { createHash } from "node:crypto";
 import { query } from "../lib/db";
 import { listFilesInFolder, downloadFile, type DriveFile } from "../lib/gdrive";
-import { extractText, SUPPORTED_MIME_TYPES } from "../lib/extract";
+import { extractText, SUPPORTED_MIME_TYPES, type ExtractedPage } from "../lib/extract";
 import { chunkText } from "../lib/chunk";
-import { embedDocuments } from "../lib/embeddings";
-import { pgvector } from "../lib/db";
+import { writeDocumentChunks } from "../lib/documents";
 import { extractAttributesFromText, writeNewAttributes, type SourceDocument } from "../lib/extractAttributes";
 
 interface Args {
@@ -42,20 +40,7 @@ function parseArgs(): Args {
   return { dealId, driveFolderId, dryRun };
 }
 
-interface PreparedChunk {
-  content: string;
-  contentHash: string;
-  chunkIndex: number;
-  pageNumber: number | null;
-}
-
-interface PreparedFile {
-  chunks: PreparedChunk[];
-  /** Full extracted text, pre-chunking — what attribute extraction reads. */
-  fullText: string;
-}
-
-async function prepareFile(file: DriveFile): Promise<PreparedFile | { skipped: string }> {
+async function prepareFile(file: DriveFile): Promise<ExtractedPage[] | { skipped: string }> {
   // A Google Doc downloads as text/plain (see lib/gdrive.ts), so check the
   // *source* mime type here for the "explicitly skip, don't fail" list.
   const isGoogleDoc = file.mimeType === "application/vnd.google-apps.document";
@@ -70,20 +55,7 @@ async function prepareFile(file: DriveFile): Promise<PreparedFile | { skipped: s
     return { skipped: "no extractable text (likely scanned/image-only — OCR not implemented)" };
   }
 
-  const chunks: PreparedChunk[] = [];
-  let chunkIndex = 0;
-  for (const page of pages) {
-    for (const content of chunkText(page.text)) {
-      chunks.push({
-        content,
-        contentHash: createHash("sha256").update(content).digest("hex"),
-        chunkIndex: chunkIndex++,
-        pageNumber: page.pageNumber,
-      });
-    }
-  }
-
-  return { chunks, fullText: pages.map((p) => p.text).join("\n\n") };
+  return pages;
 }
 
 async function main() {
@@ -119,55 +91,32 @@ async function main() {
         continue;
       }
 
-      console.log(`  OK     ${label} — ${result.chunks.length} chunk(s)`);
-      extracted++;
-      totalChunks += result.chunks.length;
+      const pages = result;
 
-      if (dryRun) continue;
-
-      sourceDocuments.push({ filename: file.name, text: result.fullText });
-
-      const embeddings = await embedDocuments(result.chunks.map((c) => c.content));
-
-      await query(
-        `delete from documents where deal_id = $1 and drive_file_id = $2 and chunk_index >= $3`,
-        [dealId, file.id, result.chunks.length]
-      );
-
-      for (let i = 0; i < result.chunks.length; i++) {
-        const chunk = result.chunks[i];
-        await query(
-          `insert into documents
-             (deal_id, drive_file_id, drive_modified_time, source_filename, mime_type,
-              chunk_index, chunk_count, page_number, content, content_hash, embedding)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-           on conflict (deal_id, drive_file_id, chunk_index)
-           do update set
-             drive_modified_time = excluded.drive_modified_time,
-             source_filename = excluded.source_filename,
-             mime_type = excluded.mime_type,
-             chunk_count = excluded.chunk_count,
-             page_number = excluded.page_number,
-             content = excluded.content,
-             content_hash = excluded.content_hash,
-             embedding = excluded.embedding,
-             ingested_at = now()
-           where documents.content_hash != excluded.content_hash`,
-          [
-            dealId,
-            file.id,
-            file.modifiedTime,
-            file.name,
-            file.mimeType,
-            chunk.chunkIndex,
-            result.chunks.length,
-            chunk.pageNumber,
-            chunk.content,
-            chunk.contentHash,
-            pgvector.toSql(embeddings[i]),
-          ]
-        );
+      if (dryRun) {
+        // Dry-run previews the chunk count without embedding or writing —
+        // chunkText() alone is cheap and has no side effects.
+        const chunkCount = pages.reduce((n, p) => n + chunkText(p.text).length, 0);
+        console.log(`  OK     ${label} — ${chunkCount} chunk(s)`);
+        extracted++;
+        totalChunks += chunkCount;
+        continue;
       }
+
+      sourceDocuments.push({ filename: file.name, text: pages.map((p) => p.text).join("\n\n") });
+
+      const { chunkCount } = await writeDocumentChunks({
+        dealId,
+        fileId: file.id,
+        modifiedTime: file.modifiedTime,
+        filename: file.name,
+        mimeType: file.mimeType,
+        pages,
+      });
+
+      console.log(`  OK     ${label} — ${chunkCount} chunk(s)`);
+      extracted++;
+      totalChunks += chunkCount;
     } catch (err) {
       console.log(`  ERROR  ${label} — ${(err as Error).message}`);
       errored++;
