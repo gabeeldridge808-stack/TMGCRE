@@ -1,0 +1,34 @@
+{
+  "name": "deal-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "ingest": "tsx scripts/ingest.ts",
+    "search": "tsx scripts/search.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "pg": "^8.13.0",
+    "pgvector": "^0.2.0",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0",
+    "googleapis": "^144.0.0",
+    "dotenv": "^16.4.5",
+    "@anthropic-ai/sdk": "^0.115.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/pdf-parse": "^1.1.4",
+    "typescript": "^5.6.0",
+    "tsx": "^4.19.0",
+    "vitest": "^2.1.4"
+  }
+}
