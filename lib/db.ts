@@ -32,6 +32,18 @@ export async function query<T = Record<string, unknown>>(
   }
 }
 
+// Unlike `query`, this does NOT swallow errors — it's for writes where the
+// caller needs to distinguish "the database is unreachable" from "the
+// database rejected this specific write" (e.g. a check constraint
+// violation) instead of getting an empty result set for either.
+export async function queryOrThrow<T = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<T[]> {
+  const result = await getPool().query(text, params);
+  return result.rows as T[];
+}
+
 export async function withClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   try {
     const client = await getPool().connect();

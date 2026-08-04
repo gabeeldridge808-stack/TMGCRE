@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createDealAction, type CreateDealState } from "./actions";
+import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 
 const initialState: CreateDealState = {};
 const fieldStyle = { display: "block", width: "100%", padding: 8, marginTop: 4 } as const;
@@ -14,7 +15,7 @@ export default function NewDealForm() {
   // submit (e.g. the DB being unreachable) instead of letting them retry.
   const [name, setName] = useState("");
   const [assetClass, setAssetClass] = useState("");
-  const [stage, setStage] = useState("");
+  const [stage, setStage] = useState<string>("sourcing");
   const [owner, setOwner] = useState("");
 
   return (
@@ -25,23 +26,32 @@ export default function NewDealForm() {
       </label>
       <label>
         Asset Class
-        <input
+        <select
           name="asset_class"
           required
           value={assetClass}
           onChange={(e) => setAssetClass(e.target.value)}
           style={fieldStyle}
-        />
+        >
+          <option value="" disabled>
+            Select asset class…
+          </option>
+          {ASSET_CLASSES.map((ac) => (
+            <option key={ac} value={ac}>
+              {titleCase(ac)}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Stage
-        <input
-          name="stage"
-          placeholder="sourcing"
-          value={stage}
-          onChange={(e) => setStage(e.target.value)}
-          style={fieldStyle}
-        />
+        <select name="stage" value={stage} onChange={(e) => setStage(e.target.value)} style={fieldStyle}>
+          {STAGES.map((s) => (
+            <option key={s} value={s}>
+              {titleCase(s)}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Owner

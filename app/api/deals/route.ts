@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { createDeal, type Deal } from "@/lib/deals";
+import { createDeal, describeCreateDealError, type Deal } from "@/lib/deals";
 
 export async function GET() {
   const deals = await query<Deal>(
@@ -20,14 +20,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const deal = await createDeal({ name, asset_class, stage: stage || "sourcing", owner });
-
-  if (!deal) {
-    return NextResponse.json(
-      { error: "Database is unavailable. Configure DATABASE_URL with a reachable Postgres instance." },
-      { status: 503 }
-    );
+  try {
+    const deal = await createDeal({ name, asset_class, stage: stage || "sourcing", owner });
+    return NextResponse.json(deal, { status: 201 });
+  } catch (error) {
+    const { status, message } = describeCreateDealError(error);
+    return NextResponse.json({ error: message }, { status });
   }
-
-  return NextResponse.json(deal, { status: 201 });
 }
