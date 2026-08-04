@@ -110,6 +110,44 @@ question I know the answer to." The chat/agent layer itself is the "Ask the
 deal" box on `/deals/[id]` (see `lib/agent.ts` and the architecture note
 above) — same retrieval, plus Claude to read and reason over what comes back.
 
+## Deploying to Vercel
+
+The app builds cleanly for production (`npm run build`) and needs no
+`vercel.json` — Vercel auto-detects Next.js. What's left is entirely
+account/config work on your side; none of it can be done from this repo:
+
+1. **Push this repo to GitHub** (or GitLab/Bitbucket) and import it in
+   Vercel ("Add New... > Project"), or skip Git entirely and run
+   `vercel` from this directory with the [Vercel CLI](https://vercel.com/docs/cli).
+2. **Provision Postgres with the `vector` extension** — Supabase or Neon
+   both work (see Setup below); Vercel Postgres does not support pgvector
+   as of this writing. Run `schema.sql` against it once created.
+3. **Set environment variables** in the Vercel project settings (Project
+   > Settings > Environment Variables) — the same four from
+   `.env.local.example`:
+   - `DATABASE_URL` (required for the app to do anything at all)
+   - `ANTHROPIC_API_KEY` (required for the "Ask the deal" chat)
+   - `VOYAGE_API_KEY` (required for `npm run ingest` — that script runs
+     locally/wherever you invoke it, not on Vercel, but it writes to the
+     same production database, so it needs the same `DATABASE_URL`)
+   - `GOOGLE_SERVICE_ACCOUNT_KEY` (also only needed for `npm run ingest`)
+4. **Redeploy** after setting env vars — Vercel doesn't hot-reload them
+   into a running deployment.
+
+**What happens if you deploy without `DATABASE_URL` set correctly:** the
+portfolio page (`/`) and deal workspace (`/deals/[id]`) degrade quietly —
+`lib/db.ts` catches connection failures and returns empty results rather
+than crashing the page (by design, see that file), so you'll see "no
+deals" instead of an error. The one place this was surfaced properly is
+the "New Deal" form, which now shows a clear inline error on failure
+(that was the bug fixed earlier in this project's history) — that's the
+fastest way to confirm the database is actually reachable after you
+deploy.
+
+`scripts/ingest.ts` and `scripts/search.ts` are CLI tools, not part of
+the deployed app — run them from your own machine (or CI) pointed at the
+same `DATABASE_URL` as production.
+
 ## Known gaps
 
 - **No OCR.** Scanned/image-only PDFs extract zero text and are skipped
