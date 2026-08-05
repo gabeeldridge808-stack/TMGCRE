@@ -36,12 +36,19 @@ async function timeIt(label: string, schema: z.ZodType) {
 }
 
 export async function GET() {
-  const control = z.object({ purchase_price: z.number(), closing_date: z.string() }).partial();
+  // Shared sections (acquisition & returns, financing terms, operating
+  // financials) are the same schema object reused across every asset
+  // class — dedupe by reference so each unique schema is only compiled once.
+  const seen = new Map<z.ZodType, string>();
+  for (const [assetClass, sections] of Object.entries(ASSET_CLASS_SECTIONS)) {
+    for (const s of sections) {
+      if (!seen.has(s.schema)) seen.set(s.schema, `${assetClass} / ${s.name}`);
+    }
+  }
 
-  const results = await Promise.allSettled([
-    timeIt("control (2 fields)", control),
-    ...ASSET_CLASS_SECTIONS.multifamily.map((s) => timeIt(s.name, s.schema)),
-  ]);
+  const results = await Promise.allSettled(
+    Array.from(seen, ([schema, label]) => timeIt(label, schema))
+  );
 
   return NextResponse.json(results.map((r) => (r.status === "fulfilled" ? r.value : { error: r.reason })));
 }

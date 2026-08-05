@@ -19,9 +19,18 @@
 // Schemas are split into sections (not one schema per asset class) because
 // Claude's structured-outputs schema compiler caps a single request at 24
 // optional top-level parameters — a full multifamily schema (deal
-// economics + multifamily fields) runs to ~40+. Splitting by logical
-// section (acquisition/returns, financing/operations, asset-specific)
-// keeps each call under that limit without cutting domain depth; see
+// economics + multifamily fields) runs to ~40+.
+//
+// That documented 24-field cap is NOT the only limit in practice. Live
+// testing found a second, undocumented "grammar compilation" cost that
+// kicks in well below 24: an 11-field flat section compiled in ~10s, a
+// 16-field flat section failed outright ("Schema is too complex."), and a
+// 16-field section that also contained one array-of-objects field (e.g.
+// unit_mix) failed with "Grammar compilation timed out" after ~180s. So
+// sections here are kept small (~7-9 scalar fields) and every
+// array-of-objects field (unit_mix, rent_roll, anchor_tenants) is split
+// into its own single-field section — bundling a row-shaped field
+// alongside other fields is what pushed compilation over the edge. See
 // lib/extractAttributes.ts, which makes one extraction call per section.
 import { z } from "zod";
 import { ASSET_CLASSES, type AssetClass } from "@/lib/dealConstants";
@@ -168,7 +177,7 @@ const acquisitionAndReturns = z.object({
   total_equity_required: z.number().describe("Total equity required to close, in USD"),
 }).partial();
 
-const financingAndOperations = z.object({
+const financingTerms = z.object({
   loan_amount: z.number().describe("Loan principal amount in USD"),
   ltv: z.number().describe("Loan-to-value ratio, e.g. 65 for 65%"),
   interest_rate: z.number().describe("Interest rate, e.g. 6.25 for 6.25%"),
@@ -178,6 +187,9 @@ const financingAndOperations = z.object({
   dscr: z.number().describe("Debt service coverage ratio, e.g. 1.25 for 1.25x"),
   lender: z.string().describe("Lender name"),
   rate_lock_date: z.string().describe("Rate lock date, if stated"),
+}).partial();
+
+const operatingFinancials = z.object({
   noi: z.number().describe("In-place / trailing NOI in USD"),
   opex_ratio: z.number().describe("Operating expenses as a percent of effective gross income"),
   capex_budget: z.number().describe("Planned capital expenditure budget in USD"),
@@ -213,10 +225,8 @@ const anchorTenantRow = z.object({
   lease_expiration: z.string().optional(),
 });
 
-const multifamilySpecific = z.object({
-  price_per_unit: z.number().describe("Purchase price divided by unit count"),
+const multifamilyOperations = z.object({
   unit_count: z.number(),
-  unit_mix: z.array(unitMixRow).describe("One row per unit type"),
   occupancy_pct: z.number().describe("Physical occupancy, e.g. 94 for 94%"),
   physical_vacancy_pct: z.number(),
   economic_vacancy_pct: z.number().describe("Vacancy loss as a percent of gross potential rent"),
@@ -224,6 +234,10 @@ const multifamilySpecific = z.object({
   t12_effective_gross_income: z.number().describe("Trailing-12-month effective gross income in USD"),
   t12_operating_expenses: z.number().describe("Trailing-12-month total operating expenses in USD"),
   t12_noi: z.number().describe("Trailing-12-month net operating income in USD"),
+}).partial();
+
+const multifamilyRents = z.object({
+  price_per_unit: z.number().describe("Purchase price divided by unit count"),
   avg_in_place_rent: z.number().describe("Average in-place rent per unit per month, all unit types blended"),
   avg_market_rent: z.number().describe("Average market/asking rent per unit per month, all unit types blended"),
   rent_growth_assumption_pct: z.number(),
@@ -232,12 +246,15 @@ const multifamilySpecific = z.object({
   amenities: z.array(z.string()).optional(),
 }).partial();
 
-const officeSpecific = z.object({
+const multifamilyUnitMix = z.object({
+  unit_mix: z.array(unitMixRow).describe("One row per unit type"),
+}).partial();
+
+const officeScalars = z.object({
   price_per_sqft: z.number(),
   total_rentable_sqft: z.number(),
   occupancy_pct: z.number(),
   wault_years: z.number().describe("Weighted average unexpired lease term across the rent roll, in years"),
-  rent_roll: z.array(rentRollRow).describe("One row per tenant lease"),
   anchor_tenant: z.string().optional(),
   largest_tenant_credit_rating: z.string().optional(),
   lease_type: z.enum(["NNN", "gross", "modified_gross"]),
@@ -245,10 +262,13 @@ const officeSpecific = z.object({
   property_class: z.enum(["A", "B", "C"]),
 }).partial();
 
-const retailSpecific = z.object({
+const officeRentRoll = z.object({
+  rent_roll: z.array(rentRollRow).describe("One row per tenant lease"),
+}).partial();
+
+const retailScalars = z.object({
   price_per_sqft: z.number(),
   total_gla_sqft: z.number().describe("Total gross leasable area"),
-  anchor_tenants: z.array(anchorTenantRow),
   occupancy_pct: z.number(),
   wault_years: z.number(),
   percentage_rent_clauses: z.string().optional().describe("Description of any percentage-rent lease terms"),
@@ -258,8 +278,11 @@ const retailSpecific = z.object({
   center_type: z.enum(["strip", "power_center", "lifestyle", "mall", "neighborhood"]),
 }).partial();
 
-const industrialSpecific = z.object({
-  price_per_sqft: z.number(),
+const retailAnchorTenants = z.object({
+  anchor_tenants: z.array(anchorTenantRow),
+}).partial();
+
+const industrialPhysical = z.object({
   total_building_sqft: z.number(),
   clear_height_ft: z.number(),
   dock_doors_count: z.number(),
@@ -267,6 +290,10 @@ const industrialSpecific = z.object({
   column_spacing: z.string().optional().describe('e.g. "50\' x 50\'"'),
   truck_court_depth_ft: z.number().optional(),
   office_finish_pct: z.number().optional().describe("Percent of building finished as office space"),
+}).partial();
+
+const industrialLease = z.object({
+  price_per_sqft: z.number(),
   lease_term_years: z.number(),
   escalation_pct: z.number(),
   tenant_industry: z.string().optional(),
@@ -288,15 +315,18 @@ const hospitalitySpecific = z.object({
   star_rating: z.number().optional(),
 }).partial();
 
-const landSpecific = z.object({
+const landScalars = z.object({
   acreage: z.number(),
   zoning: z.string(),
   entitlement_status: z.enum(["raw", "entitled", "permitted", "under_construction"]),
   far: z.number().optional().describe("Floor area ratio, if zoned/entitled"),
-  utilities_available: z.array(z.enum(["water", "sewer", "electric", "gas"])).optional(),
   topography_notes: z.string().optional(),
   environmental_status: z.enum(["none", "phase_1_esa", "phase_2_esa", "remediated"]).optional(),
   highest_best_use: z.string().optional(),
+}).partial();
+
+const landPlanning = z.object({
+  utilities_available: z.array(z.enum(["water", "sewer", "electric", "gas"])).optional(),
   planned_units_or_sqft: z.number().optional(),
   planned_use: z.enum(["multifamily", "office", "retail", "industrial", "mixed_use"]).optional(),
 }).partial();
@@ -307,39 +337,51 @@ export interface SchemaSection {
   schema: z.ZodObject<z.ZodRawShape>;
 }
 
-// Every asset class gets the two shared deal-economics sections plus its
-// own specific section — three extraction calls per document, each safely
-// under the 24-optional-parameter limit.
+// Every asset class gets the three shared deal-economics sections plus its
+// own asset-specific sections. Any row-shaped (array-of-objects) field is
+// always its own solo section — see the comment above these schemas for why.
 export const ASSET_CLASS_SECTIONS = {
   multifamily: [
     { name: "acquisition & returns", schema: acquisitionAndReturns },
-    { name: "financing & operations", schema: financingAndOperations },
-    { name: "multifamily-specific", schema: multifamilySpecific },
+    { name: "financing terms", schema: financingTerms },
+    { name: "operating financials", schema: operatingFinancials },
+    { name: "multifamily operations", schema: multifamilyOperations },
+    { name: "multifamily rents", schema: multifamilyRents },
+    { name: "multifamily unit mix", schema: multifamilyUnitMix },
   ],
   office: [
     { name: "acquisition & returns", schema: acquisitionAndReturns },
-    { name: "financing & operations", schema: financingAndOperations },
-    { name: "office-specific", schema: officeSpecific },
+    { name: "financing terms", schema: financingTerms },
+    { name: "operating financials", schema: operatingFinancials },
+    { name: "office scalars", schema: officeScalars },
+    { name: "office rent roll", schema: officeRentRoll },
   ],
   retail: [
     { name: "acquisition & returns", schema: acquisitionAndReturns },
-    { name: "financing & operations", schema: financingAndOperations },
-    { name: "retail-specific", schema: retailSpecific },
+    { name: "financing terms", schema: financingTerms },
+    { name: "operating financials", schema: operatingFinancials },
+    { name: "retail scalars", schema: retailScalars },
+    { name: "retail anchor tenants", schema: retailAnchorTenants },
   ],
   industrial: [
     { name: "acquisition & returns", schema: acquisitionAndReturns },
-    { name: "financing & operations", schema: financingAndOperations },
-    { name: "industrial-specific", schema: industrialSpecific },
+    { name: "financing terms", schema: financingTerms },
+    { name: "operating financials", schema: operatingFinancials },
+    { name: "industrial physical", schema: industrialPhysical },
+    { name: "industrial lease", schema: industrialLease },
   ],
   hospitality: [
     { name: "acquisition & returns", schema: acquisitionAndReturns },
-    { name: "financing & operations", schema: financingAndOperations },
+    { name: "financing terms", schema: financingTerms },
+    { name: "operating financials", schema: operatingFinancials },
     { name: "hospitality-specific", schema: hospitalitySpecific },
   ],
   land: [
     { name: "acquisition & returns", schema: acquisitionAndReturns },
-    { name: "financing & operations", schema: financingAndOperations },
-    { name: "land-specific", schema: landSpecific },
+    { name: "financing terms", schema: financingTerms },
+    { name: "operating financials", schema: operatingFinancials },
+    { name: "land scalars", schema: landScalars },
+    { name: "land planning", schema: landPlanning },
   ],
 } satisfies Record<AssetClass, SchemaSection[]>;
 
@@ -347,12 +389,12 @@ export const ASSET_CLASS_SECTIONS = {
 // anywhere that wants "every field this asset class can have" rather than
 // the section split extraction calls per document.
 export const ASSET_CLASS_SCHEMAS = {
-  multifamily: z.object({ ...acquisitionAndReturns.shape, ...financingAndOperations.shape, ...multifamilySpecific.shape }),
-  office: z.object({ ...acquisitionAndReturns.shape, ...financingAndOperations.shape, ...officeSpecific.shape }),
-  retail: z.object({ ...acquisitionAndReturns.shape, ...financingAndOperations.shape, ...retailSpecific.shape }),
-  industrial: z.object({ ...acquisitionAndReturns.shape, ...financingAndOperations.shape, ...industrialSpecific.shape }),
-  hospitality: z.object({ ...acquisitionAndReturns.shape, ...financingAndOperations.shape, ...hospitalitySpecific.shape }),
-  land: z.object({ ...acquisitionAndReturns.shape, ...financingAndOperations.shape, ...landSpecific.shape }),
+  multifamily: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...multifamilyOperations.shape, ...multifamilyRents.shape, ...multifamilyUnitMix.shape }),
+  office: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...officeScalars.shape, ...officeRentRoll.shape }),
+  retail: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...retailScalars.shape, ...retailAnchorTenants.shape }),
+  industrial: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...industrialPhysical.shape, ...industrialLease.shape }),
+  hospitality: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...hospitalitySpecific.shape }),
+  land: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...landScalars.shape, ...landPlanning.shape }),
 } satisfies Record<AssetClass, z.ZodType>;
 
 export function getSchemaSectionsForAssetClass(assetClass: string): SchemaSection[] | undefined {
