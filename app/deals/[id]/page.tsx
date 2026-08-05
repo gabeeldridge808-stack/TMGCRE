@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
 import DealChat from "./DealChat";
 import DealDocumentUpload from "./DealDocumentUpload";
+import AttributesSection from "./AttributesSection";
+import UnderwritingSummary from "./UnderwritingSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -59,18 +61,9 @@ export default async function DealWorkspacePage({
       </p>
 
       <h2>Attributes</h2>
-      {attributes.length === 0 ? (
-        <p>No type-specific attributes recorded yet.</p>
-      ) : (
-        <dl>
-          {attributes.map((attr) => (
-            <div key={attr.key} style={{ marginBottom: 4 }}>
-              <dt style={{ fontWeight: 600, display: "inline" }}>{attr.key}: </dt>
-              <dd style={{ display: "inline" }}>{JSON.stringify(attr.value)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <AttributesSection attributes={attributes} />
+
+      <UnderwritingSummary attributes={attributes} />
 
       <h2>Documents</h2>
       <DealDocumentUpload dealId={deal.id} />

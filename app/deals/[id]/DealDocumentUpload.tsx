@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { UPLOADABLE_MIME_TYPES } from "@/lib/dealConstants";
 
 interface UploadResult {
@@ -15,6 +16,7 @@ interface UploadResult {
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 
 export default function DealDocumentUpload({ dealId }: { dealId: string }) {
+  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "processing">("idle");
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<UploadResult[]>([]);
@@ -45,6 +47,9 @@ export default function DealDocumentUpload({ dealId }: { dealId: string }) {
           throw new Error(data.error ?? `Failed to process ${file.name}`);
         }
         setResults((prev) => [data as UploadResult, ...prev]);
+        // Re-fetch the server-rendered document list + attributes below —
+        // this component's own state (the results list above) is untouched.
+        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : `Failed to upload ${file.name}`);
       }

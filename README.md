@@ -46,16 +46,45 @@ the agent *does* write. Model is pinned to `claude-opus-5`; this is
 judgment-heavy underwriting work, not worth downgrading for cost.
 
 **Attribute extraction runs at ingest time, not chat time, and is
-insert-only.** After `scripts/ingest.ts` writes a batch of documents, it
-makes one Claude call (`lib/extractAttributes.ts`) over the newly-extracted
-text, forcing a `record_attributes` tool call, and writes whatever comes
-back to `deal_attributes` with `on conflict (deal_id, key) do nothing`. Two
-deliberate choices: it runs at ingest (a batch job with the full document
-text on hand) rather than being a tool the chat agent calls mid-conversation
-(where it would need to decide *when* writing is appropriate, and RAG
-chunks are a worse extraction source than full documents); and it never
-overwrites an existing key, so re-ingesting a folder — or a human correcting
-a bad extraction — can never be silently clobbered by a later run.
+insert-only.** After `scripts/ingest.ts` (or a direct upload) writes a
+document, it makes one Claude call (`lib/extractAttributes.ts`) over the
+newly-extracted text and writes whatever comes back to `deal_attributes`
+with `on conflict (deal_id, key) do nothing`. Two deliberate choices: it
+runs at ingest (a batch job with the full document text on hand) rather
+than being a tool the chat agent calls mid-conversation (where it would
+need to decide *when* writing is appropriate, and RAG chunks are a worse
+extraction source than full documents); and it never overwrites an
+existing key, so re-ingesting a folder — or a human correcting a bad
+extraction — can never be silently clobbered by a later run.
+
+**Attribute schemas are per-asset-class and typed, but additive — not a
+migration.** `lib/attributeSchemas.ts` defines what a CRE acquisitions team
+actually tracks per asset class (multifamily: unit mix, T-12 NOI,
+occupancy, avg in-place/market rent; office: rent roll, WAULT, lease type;
+retail: anchor tenants, sales/SF, CAM recovery; industrial: clear height,
+dock doors, lease escalations; hospitality: ADR, RevPAR, GOP margin, flag;
+land: zoning, entitlement status, FAR — plus shared deal-economics fields
+every asset class gets: cap rates, IRR, DSCR, LTV, etc.) as Zod schemas.
+This is a typed layer *on top of* `deal_attributes`, not a schema change to
+it — the table is still `(deal_id, key, value jsonb)`, so nothing about
+existing rows or the DB schema changes. The Zod schema does two jobs: (1)
+`lib/extractAttributes.ts` hands the deal's asset-class schema to Claude
+via structured outputs (`client.messages.parse` + `zodOutputFormat`) so a
+rent roll fills the `unit_mix` array with one row per unit type instead of
+Claude inventing its own loosely-typed keys, and (2) `FIELD_META` (label +
+group + unit per field) drives the grouped, labeled Attributes UI
+(`AttributesSection.tsx`) instead of a raw key: value dump. A coverage
+test (`lib/attributeSchemas.test.ts`) fails the build if a schema field is
+ever added without a matching `FIELD_META` entry.
+
+**The underwriting summary is computed at render time, not stored.**
+`lib/underwriting.ts` derives a handful of sanity-check ratios (implied cap
+rate vs. the OM's stated one, implied DSCR, cash-on-cash, price per
+unit/SF/key) from whatever numeric attributes are already present, and
+flags when a computed figure doesn't reconcile with a stated one (e.g. OM
+claims 5.5% going-in cap rate, but NOI ÷ price implies 4.5%). Deliberately
+not a full multi-year proforma/IRR model — that needs real cash-flow
+projections, which is a separate, bigger feature (see the roadmap).
 
 **Direct document upload goes through our own API route, capped at
 4.5MB.** `app/deals/[id]/DealDocumentUpload.tsx` posts the file as

@@ -1,11 +1,20 @@
 // Attribute extraction: after a deal's documents are ingested, ask Claude to
-// pull structured fields (unit count, cap rate, purchase price, whatever's
-// explicit in the text) out of the raw extracted text and write them to
+// fill the deal's asset-class attribute schema (lib/attributeSchemas.ts)
+// from the newly-extracted text and write whatever it finds to
 // deal_attributes. Insert-only (see writeNewAttributes) — re-ingesting a
 // folder, or a later extraction pass finding the same fact again, can never
 // silently overwrite a value a human already entered or corrected.
+//
+// Uses Claude's structured outputs (client.messages.parse + a Zod schema)
+// rather than a free-form tool call: the model fills the exact typed shape
+// for the deal's asset class (unit_mix rows, rent_roll rows, t12_noi, ...)
+// instead of inventing its own key names. This is what makes a rent roll
+// or T-12 upload populate the schema's row-shaped fields correctly instead
+// of a flat list of loosely-named facts.
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { query } from "@/lib/db";
+import { getSchemaForAssetClass } from "@/lib/attributeSchemas";
 
 const MODEL = "claude-opus-5";
 
@@ -14,40 +23,11 @@ const MODEL = "claude-opus-5";
 // packet without approaching context-window or per-call cost extremes.
 const MAX_EXTRACTION_CHARS = 300_000;
 
-const EXTRACTION_SYSTEM_PROMPT = `You extract structured underwriting data from commercial real estate documents (OMs, rent rolls, T-12s, appraisals) for a deal-tracking database.
+const EXTRACTION_SYSTEM_PROMPT = `You extract structured underwriting data from commercial real estate documents (OMs, rent rolls, T-12s, appraisals, leases) into the given schema for a deal-tracking database.
 
-Only record a fact if it is explicitly stated in the provided text — never estimate, infer a "typical" value, or fill in a field the document doesn't actually contain. It's correct and expected to extract nothing from a document that doesn't contain underwriting data (a lease abstract, a legal notice, a cover letter).
+Only fill a field if it is explicitly stated in the provided text — never estimate, infer a "typical" value, or fill in a field the document doesn't actually contain. Leave a field out entirely if it isn't in the text; it's correct and expected to fill nothing from a document that doesn't contain underwriting data (a lease abstract, a legal notice, a cover letter). Do not round or convert units — use the number and unit exactly as the source states it (e.g. if a rent roll gives monthly rent per unit, that is what avg_in_place_rent means; don't annualize it).
 
-Use short, snake_case keys a database column would use (purchase_price, cap_rate, unit_count, noi, occupancy_pct, year_built, revpar, adr, room_count, acreage, zoning, entitlement_status, square_footage, wault_years, ...) — prefer a key already in use over inventing a near-duplicate for the same fact. Use plain numbers for numeric values (no "$", ",", or "%" characters) and state them exactly as the source does — don't convert units or normalize a percentage to a fraction. For a repeated structure like unit mix or a tenant roster, use one key (e.g. unit_mix, tenant_roster) with an array value.
-
-Call record_attributes exactly once. If nothing in the provided text is extractable, call it with an empty array — don't skip the tool call.`;
-
-const RECORD_ATTRIBUTES_TOOL = {
-  name: "record_attributes",
-  description: "Record the structured underwriting facts found in the provided documents.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      attributes: {
-        type: "array",
-        description: "One entry per distinct fact found. Empty array if nothing extractable was found.",
-        items: {
-          type: "object",
-          properties: {
-            key: { type: "string", description: "snake_case field name" },
-            value: {
-              description:
-                "The value as stated in the source — a number, string, boolean, or an array/object for structured data like a unit mix.",
-            },
-            source_filename: { type: "string", description: "Which document this came from" },
-          },
-          required: ["key", "value", "source_filename"],
-        },
-      },
-    },
-    required: ["attributes"],
-  },
-};
+For row-shaped fields (unit_mix, rent_roll, anchor_tenants), include one row per distinct unit type / tenant / lease actually listed in the document — don't summarize multiple rows into one, and don't fabricate a row for a unit type or tenant not present in the text.`;
 
 export interface ExtractedAttribute {
   key: string;
@@ -84,7 +64,7 @@ export function buildExtractionPrompt(
   documents: SourceDocument[]
 ): string {
   const knownLine = existingKeys.length
-    ? `Already recorded for this deal (don't re-extract these): ${existingKeys.join(", ")}`
+    ? `Already recorded for this deal (you may still fill these if the documents restate them, but don't invent values for other fields just because these are known): ${existingKeys.join(", ")}`
     : `Nothing has been recorded for this deal yet.`;
 
   const docLines = documents.map((d) => `--- ${d.filename} ---\n${d.text}`).join("\n\n");
@@ -92,33 +72,40 @@ export function buildExtractionPrompt(
   return `Asset class: ${assetClass}\n${knownLine}\n\n${docLines}`;
 }
 
-/** Calls Claude once to extract attributes from the given document text. */
+/**
+ * Calls Claude once to fill the asset class's attribute schema from the
+ * given document text. Falls back to an empty result for an asset class
+ * with no schema (shouldn't happen given schema.sql's check constraint,
+ * but a schema lookup miss shouldn't crash ingestion).
+ */
 export async function extractAttributesFromText(
   assetClass: string,
   existingKeys: string[],
   documents: SourceDocument[]
 ): Promise<ExtractedAttribute[]> {
+  const schema = getSchemaForAssetClass(assetClass);
+  if (!schema) return [];
+
   const client = new Anthropic();
   const budgeted = capToCharBudget(documents, MAX_EXTRACTION_CHARS);
   const prompt = buildExtractionPrompt(assetClass, existingKeys, budgeted);
+  const sourceFilename = documents.map((d) => d.filename).join(", ");
 
-  const response = await client.messages.create({
+  const message = await client.messages.parse({
     model: MODEL,
     max_tokens: 8192,
     system: EXTRACTION_SYSTEM_PROMPT,
     thinking: { type: "adaptive" },
-    output_config: { effort: "medium" },
-    tools: [RECORD_ATTRIBUTES_TOOL],
+    output_config: { effort: "medium", format: zodOutputFormat(schema) },
     messages: [{ role: "user", content: prompt }],
   });
 
-  const toolUse = response.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-  );
-  if (!toolUse) return [];
+  const parsed = message.parsed_output;
+  if (!parsed) return [];
 
-  const input = toolUse.input as { attributes?: ExtractedAttribute[] };
-  return input.attributes ?? [];
+  return Object.entries(parsed)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => ({ key, value, source_filename: sourceFilename }));
 }
 
 /** Insert-only — never overwrites an attribute that already has a value. */
