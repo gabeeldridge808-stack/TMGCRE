@@ -3,9 +3,12 @@ import { put } from "@vercel/blob";
 import { query } from "@/lib/db";
 import { processUploadedDocument } from "@/lib/documents";
 
-// Embedding + attribute-extraction calls can run long on a big document;
-// give this route more headroom than Vercel's default.
-export const maxDuration = 60;
+// Embedding + attribute-extraction (3 parallel Claude calls, one per
+// schema section — see lib/attributeSchemas.ts) can run long on a real
+// document. 60s (Vercel's Hobby-plan ceiling) was measured too tight and
+// hit "Task timed out after 60 seconds" in production; ask for more and
+// let the platform clamp it if the plan doesn't allow it.
+export const maxDuration = 300;
 
 interface Deal {
   asset_class: string;

@@ -100,7 +100,12 @@ export async function extractAttributesFromText(
         max_tokens: 8192,
         system: EXTRACTION_SYSTEM_PROMPT,
         thinking: { type: "adaptive" },
-        output_config: { effort: "medium", format: zodOutputFormat(section.schema) },
+        // "low" — this is bounded pattern-matching against an explicit
+        // schema, not open-ended reasoning, and it runs 3x in parallel per
+        // upload inside a request with a hard duration ceiling (see the
+        // maxDuration comment in the API route) — "medium" measurably
+        // pushed real requests over that ceiling.
+        output_config: { effort: "low", format: zodOutputFormat(section.schema) },
         messages: [{ role: "user", content: prompt }],
       });
       return message.parsed_output;
