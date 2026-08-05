@@ -1,16 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { ASSET_CLASS_SCHEMAS, FIELD_META, getSchemaForAssetClass } from "@/lib/attributeSchemas";
+import { ASSET_CLASS_SCHEMAS, FIELD_META, getSchemaSectionsForAssetClass } from "@/lib/attributeSchemas";
 import { ASSET_CLASSES } from "@/lib/dealConstants";
 
-describe("getSchemaForAssetClass", () => {
-  it("returns a schema for every asset class in the shared enum", () => {
+// Claude's structured-outputs schema compiler rejects a request with more
+// than this many optional top-level parameters — see the comment at the
+// top of lib/attributeSchemas.ts. Every section must stay under it.
+const MAX_OPTIONAL_PARAMS = 24;
+
+describe("getSchemaSectionsForAssetClass", () => {
+  it("returns sections for every asset class in the shared enum", () => {
     for (const assetClass of ASSET_CLASSES) {
-      expect(getSchemaForAssetClass(assetClass)).toBeDefined();
+      const sections = getSchemaSectionsForAssetClass(assetClass);
+      expect(sections).toBeDefined();
+      expect(sections!.length).toBeGreaterThan(0);
     }
   });
 
   it("returns undefined for an unknown asset class", () => {
-    expect(getSchemaForAssetClass("bogus")).toBeUndefined();
+    expect(getSchemaSectionsForAssetClass("bogus")).toBeUndefined();
+  });
+
+  it("keeps every section under Claude's optional-parameter limit", () => {
+    for (const assetClass of ASSET_CLASSES) {
+      for (const section of getSchemaSectionsForAssetClass(assetClass)!) {
+        const fieldCount = Object.keys(section.schema.shape).length;
+        expect(fieldCount, `${assetClass} / ${section.name}`).toBeLessThanOrEqual(MAX_OPTIONAL_PARAMS);
+      }
+    }
   });
 });
 

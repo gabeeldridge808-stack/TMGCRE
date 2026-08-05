@@ -14,7 +14,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { query } from "@/lib/db";
-import { getSchemaForAssetClass } from "@/lib/attributeSchemas";
+import { getSchemaSectionsForAssetClass } from "@/lib/attributeSchemas";
 
 const MODEL = "claude-opus-5";
 
@@ -73,39 +73,49 @@ export function buildExtractionPrompt(
 }
 
 /**
- * Calls Claude once to fill the asset class's attribute schema from the
- * given document text. Falls back to an empty result for an asset class
- * with no schema (shouldn't happen given schema.sql's check constraint,
- * but a schema lookup miss shouldn't crash ingestion).
+ * Fills the asset class's attribute schema from the given document text —
+ * one Claude call per schema section (see lib/attributeSchemas.ts for why
+ * it's split into sections rather than one big schema) — and returns the
+ * combined result across all sections. Falls back to an empty result for
+ * an asset class with no schema (shouldn't happen given schema.sql's check
+ * constraint, but a lookup miss shouldn't crash ingestion).
  */
 export async function extractAttributesFromText(
   assetClass: string,
   existingKeys: string[],
   documents: SourceDocument[]
 ): Promise<ExtractedAttribute[]> {
-  const schema = getSchemaForAssetClass(assetClass);
-  if (!schema) return [];
+  const sections = getSchemaSectionsForAssetClass(assetClass);
+  if (!sections) return [];
 
   const client = new Anthropic();
   const budgeted = capToCharBudget(documents, MAX_EXTRACTION_CHARS);
   const prompt = buildExtractionPrompt(assetClass, existingKeys, budgeted);
   const sourceFilename = documents.map((d) => d.filename).join(", ");
 
-  const message = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 8192,
-    system: EXTRACTION_SYSTEM_PROMPT,
-    thinking: { type: "adaptive" },
-    output_config: { effort: "medium", format: zodOutputFormat(schema) },
-    messages: [{ role: "user", content: prompt }],
-  });
+  const sectionResults = await Promise.all(
+    sections.map(async (section) => {
+      const message = await client.messages.parse({
+        model: MODEL,
+        max_tokens: 8192,
+        system: EXTRACTION_SYSTEM_PROMPT,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium", format: zodOutputFormat(section.schema) },
+        messages: [{ role: "user", content: prompt }],
+      });
+      return message.parsed_output;
+    })
+  );
 
-  const parsed = message.parsed_output;
-  if (!parsed) return [];
-
-  return Object.entries(parsed)
-    .filter(([, value]) => value !== undefined && value !== null)
-    .map(([key, value]) => ({ key, value, source_filename: sourceFilename }));
+  const attributes: ExtractedAttribute[] = [];
+  for (const parsed of sectionResults) {
+    if (!parsed) continue;
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value === undefined || value === null) continue;
+      attributes.push({ key, value, source_filename: sourceFilename });
+    }
+  }
+  return attributes;
 }
 
 /** Insert-only — never overwrites an attribute that already has a value. */
