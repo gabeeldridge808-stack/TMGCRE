@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { titleCase } from "@/lib/dealConstants";
 
 interface ChecklistItem {
@@ -13,13 +12,17 @@ interface ChecklistItem {
 export default function ChecklistSection({
   dealId,
   stage,
-  items,
+  items: initialItems,
 }: {
   dealId: string;
   stage: string;
   items: ChecklistItem[];
 }) {
-  const router = useRouter();
+  // Local, optimistic state — not driven by router.refresh(). A controlled
+  // checkbox with no local update snaps back to its old value the instant
+  // React re-renders after the click (before the PATCH round-trip
+  // resolves), which reads as "checking it did nothing."
+  const [items, setItems] = useState(initialItems);
   const [pending, setPending] = useState<string | null>(null);
 
   if (items.length === 0) {
@@ -30,15 +33,15 @@ export default function ChecklistSection({
 
   async function toggle(itemId: string, done: boolean) {
     setPending(itemId);
+    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, done } : i)));
     const res = await fetch(`/api/deals/${dealId}/checklist-items/${itemId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ done }),
     });
     setPending(null);
-    if (res.ok) {
-      router.refresh();
-    } else {
+    if (!res.ok) {
+      setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, done: !done } : i)));
       alert("Failed to update checklist item.");
     }
   }
