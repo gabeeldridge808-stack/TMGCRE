@@ -106,7 +106,14 @@ export default async function DealWorkspacePage({
     <div>
       <ChecklistSection dealId={deal.id} stage={deal.stage} items={checklistItems} />
 
-      <h2>Attributes</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <h2 style={{ margin: "2rem 0 0.75rem" }}>Attributes</h2>
+        {attributes.length > 0 && (
+          <a href={`/api/deals/${deal.id}/attributes/export`} className="btn btn-secondary btn-sm">
+            Export CSV
+          </a>
+        )}
+      </div>
       <AttributesSection attributes={attributes} />
 
       <h2>Documents</h2>

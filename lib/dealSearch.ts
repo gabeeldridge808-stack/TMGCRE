@@ -42,3 +42,23 @@ export function filterDealsByFacets<T extends DealSearchItem>(
     return true;
   });
 }
+
+export interface Page<T> {
+  items: T[];
+  page: number;
+  totalPages: number;
+  totalItems: number;
+}
+
+/** Pure: 1-indexed page slice, clamped into [1, totalPages] so an out-of-range page (e.g. from a stale bookmark) doesn't return an empty page unnecessarily. */
+export function paginate<T>(items: T[], page: number, pageSize: number): Page<T> {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const clampedPage = Math.min(Math.max(1, page), totalPages);
+  const start = (clampedPage - 1) * pageSize;
+  return {
+    items: items.slice(start, start + pageSize),
+    page: clampedPage,
+    totalPages,
+    totalItems: items.length,
+  };
+}

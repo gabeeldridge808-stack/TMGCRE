@@ -1,5 +1,5 @@
 import { query } from "@/lib/db";
-import { filterDealsByQuery, filterDealsByFacets } from "@/lib/dealSearch";
+import { filterDealsByQuery, filterDealsByFacets, paginate } from "@/lib/dealSearch";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 import { getCurrentUser } from "@/lib/session";
 import type { DateAttributeRow } from "@/lib/keyDates";
@@ -17,8 +17,10 @@ interface Deal {
 }
 
 interface PortfolioPageProps {
-  searchParams?: Promise<{ q?: string; asset_class?: string; stage?: string }>;
+  searchParams?: Promise<{ q?: string; asset_class?: string; stage?: string; page?: string }>;
 }
+
+const PAGE_SIZE = 25;
 
 export default async function PortfolioPage({ searchParams }: PortfolioPageProps) {
   const params = await searchParams;
@@ -33,6 +35,8 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
     assetClass: assetClassFilter,
     stage: stageFilter,
   });
+  const pageNum = Number(params?.page) || 1;
+  const { items: pagedDeals, page: currentPage, totalPages } = paginate(filteredDeals, pageNum, PAGE_SIZE);
 
   const currentUser = await getCurrentUser();
   const isAdmin = currentUser?.role === "admin";
@@ -48,9 +52,17 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
     <main className="page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>Portfolio</h1>
-        <a href="/board" className="btn btn-secondary btn-sm">
-          Board view
-        </a>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a
+            href={`/api/deals/export?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}`}
+            className="btn btn-secondary btn-sm"
+          >
+            Export CSV
+          </a>
+          <a href="/board" className="btn btn-secondary btn-sm">
+            Board view
+          </a>
+        </div>
       </div>
 
       <KeyDatesWidget rows={dateAttrRows} />
@@ -87,7 +99,34 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
       {filteredDeals.length === 0 ? (
         <p className="text-muted">No deals match your search.</p>
       ) : (
-        <PortfolioTable deals={filteredDeals} isAdmin={isAdmin} />
+        <>
+          <PortfolioTable deals={pagedDeals} isAdmin={isAdmin} />
+          {totalPages > 1 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+              <span className="text-muted" style={{ fontSize: 13 }}>
+                Page {currentPage} of {totalPages} ({filteredDeals.length} deals)
+              </span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <a
+                  href={`/?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&page=${currentPage - 1}`}
+                  className="btn btn-secondary btn-sm"
+                  aria-disabled={currentPage <= 1}
+                  style={currentPage <= 1 ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                >
+                  Previous
+                </a>
+                <a
+                  href={`/?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&page=${currentPage + 1}`}
+                  className="btn btn-secondary btn-sm"
+                  aria-disabled={currentPage >= totalPages}
+                  style={currentPage >= totalPages ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                >
+                  Next
+                </a>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </main>
   );
