@@ -176,6 +176,29 @@ question I know the answer to." The chat/agent layer itself is the "Ask the
 deal" box on `/deals/[id]` (see `lib/agent.ts` and the architecture note
 above) — same retrieval, plus Claude to read and reason over what comes back.
 
+## End-to-end tests
+
+```
+npm run test:e2e
+```
+
+Playwright, against a real deployed URL — not a local dev server, since
+this environment's `DATABASE_URL` is a placeholder with no real backend to
+run one against (`playwright.config.ts` defaults to production; override
+with `E2E_BASE_URL` to point at a preview deployment instead). Requires an
+existing account:
+
+```
+E2E_TEST_EMAIL=you@example.com E2E_TEST_PASSWORD=yourpassword npm run test:e2e
+```
+
+Tests that don't need to be logged in (`e2e/auth.spec.ts`'s redirect/invalid-
+login/401 checks) run without these and are skipped only where they
+specifically require a working login. Deal-deletion assertions require that
+account to have the `admin` role. Tests clean up the deals they create
+(by name, in `beforeEach`/`afterEach`) so repeated runs don't accumulate
+data in whatever portfolio they're pointed at.
+
 ## Deploying to Vercel
 
 The app builds cleanly for production (`npm run build`) and needs no

@@ -18,7 +18,13 @@ test.describe("deal workspace", () => {
     await page.goto("/deals/new");
     await page.fill('input[name="name"]', DEAL_NAME);
     await page.selectOption('select[name="asset_class"]', "office");
-    await page.click('button[type="submit"]');
+    await page.fill('input[name="owner"]', "e2e");
+    // Scoped to the form, not a bare `button[type="submit"]` -- the site
+    // header's "Log out" button is *also* type="submit" and appears earlier
+    // in the DOM, so an unscoped selector silently clicks that one instead
+    // (page.click on an ambiguous selector picks the first match rather
+    // than erroring -- this is exactly what happened debugging this test).
+    await page.locator("form").getByRole("button", { name: "Create deal" }).click();
     await page.waitForURL(/\/deals\/[0-9a-f-]+$/);
     await expect(page.locator("h1")).toHaveText(DEAL_NAME);
 
@@ -26,23 +32,24 @@ test.describe("deal workspace", () => {
     await expect(page.getByText("Sourcing Checklist")).toBeVisible();
 
     // Edit
-    await page.click('a:has-text("Edit")');
+    await page.getByRole("link", { name: "Edit" }).click();
+    await page.waitForURL(/\/deals\/[0-9a-f-]+\/edit$/);
     await page.fill('input[name="name"]', `${DEAL_NAME} Renamed`);
-    await page.click('button:has-text("Save changes")');
+    await page.locator("form").getByRole("button", { name: "Save changes" }).click();
     await page.waitForURL(/\/deals\/[0-9a-f-]+$/);
     await expect(page.locator("h1")).toHaveText(`${DEAL_NAME} Renamed`);
 
     // Underwriting tab renders and computes
-    await page.click('button:has-text("Underwriting")');
-    await expect(page.getByText("Levered IRR")).toBeVisible();
-    await expect(page.getByText("Levered IRR Sensitivity")).toBeVisible();
+    await page.getByRole("button", { name: "Underwriting" }).click();
+    await expect(page.getByText("Levered IRR", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Levered IRR Sensitivity" })).toBeVisible();
 
     // Comps tab renders
-    await page.click('button:has-text("Comps")');
+    await page.getByRole("button", { name: "Comps" }).click();
     await expect(page.getByText("Import Comps from CSV")).toBeVisible();
 
     // Activity tab shows the creation event
-    await page.click('button:has-text("Activity")');
+    await page.getByRole("button", { name: "Activity" }).click();
     await expect(page.getByText("created this deal")).toBeVisible();
   });
 
