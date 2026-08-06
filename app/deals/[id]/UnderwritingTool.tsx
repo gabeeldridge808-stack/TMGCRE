@@ -27,7 +27,7 @@ const INPUT_FIELDS: FieldSpec[] = [
   { key: "sellingCostsPct", label: "Selling Costs", suffix: "%", step: 0.5 },
   { key: "loanToValuePct", label: "Loan-to-Value", suffix: "%", step: 1 },
   { key: "interestRatePct", label: "Interest Rate", suffix: "%", step: 0.125 },
-  { key: "amortizationYears", label: "Amortization (0 = interest-only)", suffix: "years" },
+  { key: "amortizationYears", label: "Amortization, 0=IO", suffix: "years" },
 ];
 
 function money(n: number): string {
