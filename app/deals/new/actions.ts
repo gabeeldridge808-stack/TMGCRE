@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { buildDealPayload } from "@/lib/dealForm";
 import { createDeal, describeDealWriteError } from "@/lib/deals";
 import { getCurrentUser } from "@/lib/session";
@@ -8,6 +7,7 @@ import { recordAuditLog } from "@/lib/auditLog";
 
 export interface CreateDealState {
   error?: string;
+  dealId?: string;
 }
 
 export async function createDealAction(
@@ -36,5 +36,13 @@ export async function createDealAction(
   const user = await getCurrentUser();
   if (user) await recordAuditLog(user, { dealId, action: "deal.created" });
 
-  redirect(`/deals/${dealId}`);
+  // Return the new id and let the client navigate (router.push), rather
+  // than calling redirect() here. redirect() to a middleware-protected
+  // path from inside a Server Action bounces back to /login even for an
+  // authenticated user — Next.js's internal re-render of the redirect
+  // target doesn't carry the session cookie the way a real browser
+  // navigation does. Every other mutation in this app already navigates
+  // client-side after the action resolves; this makes create/edit consistent
+  // with that instead of the one place still using redirect().
+  return { dealId };
 }

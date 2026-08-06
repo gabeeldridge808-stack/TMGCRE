@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { buildDealPayload } from "@/lib/dealForm";
 import { updateDeal, describeDealWriteError } from "@/lib/deals";
 import { getCurrentUser } from "@/lib/session";
@@ -8,6 +7,7 @@ import { recordAuditLog } from "@/lib/auditLog";
 
 export interface EditDealState {
   error?: string;
+  saved?: boolean;
 }
 
 export async function editDealAction(
@@ -35,5 +35,8 @@ export async function editDealAction(
   const user = await getCurrentUser();
   if (user) await recordAuditLog(user, { dealId, action: "deal.updated" });
 
-  redirect(`/deals/${dealId}`);
+  // See the comment in app/deals/new/actions.ts — redirect() to a
+  // middleware-protected path from a Server Action bounces to /login even
+  // for an authenticated user, so the client navigates instead.
+  return { saved: true };
 }

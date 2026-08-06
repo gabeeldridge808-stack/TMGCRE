@@ -16,10 +16,6 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const user = token ? await verifySessionToken(token) : null;
 
-  // TEMPORARY diagnostic — remove once the New Deal server-action redirect
-  // bug is root-caused.
-  console.log("[mw-debug]", req.method, pathname, "hasCookie:", !!token, "cookieLen:", token?.length ?? 0, "userValid:", !!user);
-
   if (!user) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });

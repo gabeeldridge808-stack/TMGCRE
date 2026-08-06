@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { editDealAction, type EditDealState } from "./actions";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 
@@ -13,8 +14,13 @@ export default function EditDealForm({
   dealId: string;
   initial: { name: string; asset_class: string; stage: string; owner: string };
 }) {
+  const router = useRouter();
   const boundAction = editDealAction.bind(null, dealId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
+
+  useEffect(() => {
+    if (state.saved) router.push(`/deals/${dealId}`);
+  }, [state.saved, dealId, router]);
 
   const [name, setName] = useState(initial.name);
   const [assetClass, setAssetClass] = useState(initial.asset_class);

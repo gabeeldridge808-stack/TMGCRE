@@ -1,13 +1,19 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createDealAction, type CreateDealState } from "./actions";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 
 const initialState: CreateDealState = {};
 
 export default function NewDealForm() {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(createDealAction, initialState);
+
+  useEffect(() => {
+    if (state.dealId) router.push(`/deals/${state.dealId}`);
+  }, [state.dealId, router]);
 
   // Controlled inputs — React resets uncontrolled fields after a form action
   // runs, which would otherwise wipe everything the user typed on a failed
