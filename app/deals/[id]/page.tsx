@@ -14,6 +14,7 @@ import CompsTable from "./CompsTable";
 import AuditLogSection from "./AuditLogSection";
 import IcMemoTool from "./IcMemoTool";
 import ChecklistSection from "./ChecklistSection";
+import DocumentList from "./DocumentList";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ interface DealAttribute {
 interface DocumentFile {
   source_filename: string;
   chunk_count: string;
+  drive_file_id: string;
 }
 
 interface Comp {
@@ -78,9 +80,9 @@ export default async function DealWorkspacePage({
   );
 
   const files = await query<DocumentFile>(
-    `select source_filename, count(*) as chunk_count
+    `select source_filename, drive_file_id, count(*) as chunk_count
      from documents where deal_id = $1
-     group by source_filename
+     group by source_filename, drive_file_id
      order by max(ingested_at) desc`,
     [id]
   );
@@ -115,13 +117,7 @@ export default async function DealWorkspacePage({
           No documents uploaded yet.
         </p>
       ) : (
-        <ul style={{ marginTop: 12, paddingLeft: 20 }}>
-          {files.map((f) => (
-            <li key={f.source_filename}>
-              {f.source_filename} — {f.chunk_count} chunk(s)
-            </li>
-          ))}
-        </ul>
+        <DocumentList dealId={deal.id} files={files} />
       )}
 
       <p className="text-faint" style={{ marginTop: 12 }}>
