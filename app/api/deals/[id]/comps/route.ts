@@ -27,7 +27,14 @@ interface Comp {
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const comps = await query<Comp>(
-    `select * from comps where deal_id = $1 order by sale_date desc nulls last, created_at desc`,
+    // to_char, not the raw `date` column — node-postgres returns `date`
+    // columns as native JS Date objects (unlike `numeric`, which comes
+    // back as a string), and this response is rendered directly as JSX text.
+    `select id, deal_id, property_name, address, city, state, asset_class,
+            to_char(sale_date, 'YYYY-MM-DD') as sale_date,
+            sale_price, price_per_sqft, price_per_unit, cap_rate,
+            building_sqft, unit_count, year_built, buyer, seller, source, extra, created_at
+     from comps where deal_id = $1 order by sale_date desc nulls last, created_at desc`,
     [id]
   );
   return NextResponse.json(comps);

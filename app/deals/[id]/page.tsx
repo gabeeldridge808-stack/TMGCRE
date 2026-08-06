@@ -72,7 +72,12 @@ export default async function DealWorkspacePage({
   );
 
   const comps = await query<Comp>(
-    `select * from comps where deal_id = $1 order by sale_date desc nulls last, created_at desc`,
+    // to_char, not the raw `date` column — see the same note in
+    // app/api/deals/[id]/comps/route.ts.
+    `select id, property_name, address, city, state,
+            to_char(sale_date, 'YYYY-MM-DD') as sale_date,
+            sale_price, price_per_sqft, price_per_unit, cap_rate, building_sqft, unit_count
+     from comps where deal_id = $1 order by sale_date desc nulls last, created_at desc`,
     [id]
   );
 
