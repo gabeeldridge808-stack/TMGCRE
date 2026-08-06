@@ -1,6 +1,7 @@
-// Shared deal-creation logic used by both the API route
-// (app/api/deals/route.ts) and the "New Deal" server action
-// (app/deals/new/actions.ts) — one INSERT, not two copies of it.
+// Shared deal-creation/edit logic used by the API routes
+// (app/api/deals/route.ts, app/api/deals/[id]/route.ts) and the "New Deal"
+// / "Edit Deal" server actions — one INSERT and one UPDATE, not scattered
+// copies of them.
 import { queryOrThrow } from "@/lib/db";
 import { ASSET_CLASSES, STAGES } from "@/lib/dealConstants";
 
@@ -21,7 +22,7 @@ export interface CreateDealInput {
   owner: string;
 }
 
-/** Throws on any failure — callers use describeCreateDealError to turn that into a message. */
+/** Throws on any failure — callers use describeDealWriteError to turn that into a message. */
 export async function createDeal(input: CreateDealInput): Promise<Deal> {
   const [deal] = await queryOrThrow<Deal>(
     `insert into deals (name, asset_class, stage, owner)
@@ -32,7 +33,21 @@ export async function createDeal(input: CreateDealInput): Promise<Deal> {
   return deal;
 }
 
-export interface CreateDealError {
+/** Throws on any failure (including "not found", surfaced as a plain Error) — callers use describeDealWriteError. */
+export async function updateDeal(id: string, input: CreateDealInput): Promise<Deal> {
+  const [deal] = await queryOrThrow<Deal>(
+    `update deals set name = $2, asset_class = $3, stage = $4, owner = $5, updated_at = now()
+     where id = $1
+     returning *`,
+    [id, input.name, input.asset_class, input.stage, input.owner]
+  );
+  if (!deal) {
+    throw new Error("not found");
+  }
+  return deal;
+}
+
+export interface DealWriteError {
   status: number;
   message: string;
 }
@@ -40,8 +55,11 @@ export interface CreateDealError {
 // Postgres check-constraint violation. See https://www.postgresql.org/docs/current/errcodes-appendix.html
 const CHECK_VIOLATION = "23514";
 
-/** Pure: turns a createDeal() failure into a status + message a caller can show directly. */
-export function describeCreateDealError(error: unknown): CreateDealError {
+/** Pure: turns a createDeal()/updateDeal() failure into a status + message a caller can show directly. */
+export function describeDealWriteError(error: unknown): DealWriteError {
+  if (error instanceof Error && error.message === "not found") {
+    return { status: 404, message: "Deal not found." };
+  }
   const code = (error as { code?: string } | null | undefined)?.code;
 
   if (code === CHECK_VIOLATION) {

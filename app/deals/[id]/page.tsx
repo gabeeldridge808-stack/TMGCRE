@@ -94,7 +94,12 @@ export default async function DealWorkspacePage({
       <p>
         <a href="/">&larr; Portfolio</a>
       </p>
-      <h1>{deal.name}</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+        <h1 style={{ margin: 0 }}>{deal.name}</h1>
+        <a href={`/deals/${deal.id}/edit`} style={{ fontSize: 14 }}>
+          Edit
+        </a>
+      </div>
       <p style={{ marginBottom: 24 }}>
         {titleCase(deal.asset_class)} &middot; {titleCase(deal.stage)} &middot; owner: {deal.owner}
       </p>

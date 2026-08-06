@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { createDeal, describeCreateDealError, type Deal } from "@/lib/deals";
+import { createDeal, describeDealWriteError, type Deal } from "@/lib/deals";
 
 export async function GET() {
   const deals = await query<Deal>(
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const deal = await createDeal({ name, asset_class, stage: stage || "sourcing", owner });
     return NextResponse.json(deal, { status: 201 });
   } catch (error) {
-    const { status, message } = describeCreateDealError(error);
+    const { status, message } = describeDealWriteError(error);
     return NextResponse.json({ error: message }, { status });
   }
 }

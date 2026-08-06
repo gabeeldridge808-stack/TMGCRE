@@ -2,16 +2,17 @@
 
 import { redirect } from "next/navigation";
 import { buildDealPayload } from "@/lib/dealForm";
-import { createDeal, describeDealWriteError } from "@/lib/deals";
+import { updateDeal, describeDealWriteError } from "@/lib/deals";
 
-export interface CreateDealState {
+export interface EditDealState {
   error?: string;
 }
 
-export async function createDealAction(
-  _prevState: CreateDealState,
+export async function editDealAction(
+  dealId: string,
+  _prevState: EditDealState,
   formData: FormData
-): Promise<CreateDealState> {
+): Promise<EditDealState> {
   const payload = buildDealPayload({
     name: formData.get("name")?.toString() ?? "",
     asset_class: formData.get("asset_class")?.toString() ?? "",
@@ -23,10 +24,8 @@ export async function createDealAction(
     return { error: "Name, asset class, and owner are required." };
   }
 
-  let dealId: string;
   try {
-    const deal = await createDeal(payload);
-    dealId = deal.id;
+    await updateDeal(dealId, payload);
   } catch (error) {
     return { error: describeDealWriteError(error).message };
   }

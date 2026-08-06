@@ -2,7 +2,7 @@ import Link from "next/link";
 import { query } from "@/lib/db";
 import { filterDealsByQuery, filterDealsByFacets } from "@/lib/dealSearch";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
-import DeleteDealButton from "./DeleteDealButton";
+import PortfolioTable from "./PortfolioTable";
 
 export const dynamic = "force-dynamic";
 
@@ -71,36 +71,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
         </button>
       </form>
 
-      {filteredDeals.length === 0 ? (
-        <p>No deals match your search.</p>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
-              <th style={{ padding: "8px 4px" }}>Name</th>
-              <th style={{ padding: "8px 4px" }}>Asset Class</th>
-              <th style={{ padding: "8px 4px" }}>Stage</th>
-              <th style={{ padding: "8px 4px" }}>Owner</th>
-              <th style={{ padding: "8px 4px" }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDeals.map((deal) => (
-              <tr key={deal.id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: "8px 4px" }}>
-                  <Link href={`/deals/${deal.id}`}>{deal.name}</Link>
-                </td>
-                <td style={{ padding: "8px 4px" }}>{titleCase(deal.asset_class)}</td>
-                <td style={{ padding: "8px 4px" }}>{titleCase(deal.stage)}</td>
-                <td style={{ padding: "8px 4px" }}>{deal.owner}</td>
-                <td style={{ padding: "8px 4px", textAlign: "right" }}>
-                  <DeleteDealButton dealId={deal.id} dealName={deal.name} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {filteredDeals.length === 0 ? <p>No deals match your search.</p> : <PortfolioTable deals={filteredDeals} />}
     </main>
   );
 }

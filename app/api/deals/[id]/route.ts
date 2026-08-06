@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { query, queryOrThrow } from "@/lib/db";
+import { describeDealWriteError } from "@/lib/deals";
 
 interface Deal {
   id: string;
@@ -43,17 +44,26 @@ export async function PATCH(
   const body = await req.json();
   const { name, asset_class, stage, owner, attributes } = body;
 
-  const [deal] = await query<Deal>(
-    `update deals set
-       name = coalesce($2, name),
-       asset_class = coalesce($3, asset_class),
-       stage = coalesce($4, stage),
-       owner = coalesce($5, owner),
-       updated_at = now()
-     where id = $1
-     returning *`,
-    [id, name, asset_class, stage, owner]
-  );
+  let deal: Deal | undefined;
+  try {
+    // queryOrThrow, not query — a bad asset_class/stage here must surface as
+    // the actual check-constraint error, not silently look like "not found"
+    // (query() swallows DB errors into an empty result set; see lib/db.ts).
+    [deal] = await queryOrThrow<Deal>(
+      `update deals set
+         name = coalesce($2, name),
+         asset_class = coalesce($3, asset_class),
+         stage = coalesce($4, stage),
+         owner = coalesce($5, owner),
+         updated_at = now()
+       where id = $1
+       returning *`,
+      [id, name, asset_class, stage, owner]
+    );
+  } catch (error) {
+    const { status, message } = describeDealWriteError(error);
+    return NextResponse.json({ error: message }, { status });
+  }
 
   if (!deal) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
