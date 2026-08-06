@@ -30,3 +30,15 @@ export function filterDealsByQuery<T extends DealSearchItem>(
     return haystack.includes(term);
   });
 }
+
+/** Exact-match filters, applied in addition to (not instead of) the free-text search. */
+export function filterDealsByFacets<T extends DealSearchItem>(
+  deals: T[],
+  facets: { assetClass?: string; stage?: string }
+): T[] {
+  return deals.filter((deal) => {
+    if (facets.assetClass && deal.asset_class !== facets.assetClass) return false;
+    if (facets.stage && deal.stage !== facets.stage) return false;
+    return true;
+  });
+}

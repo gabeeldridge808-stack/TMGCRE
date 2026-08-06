@@ -8,7 +8,11 @@ export type AssetClass = (typeof ASSET_CLASSES)[number];
 export type Stage = (typeof STAGES)[number];
 
 export function titleCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  return value
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 // Mime types the direct-upload pipeline (lib/documents.ts) can extract text

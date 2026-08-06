@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
+import { titleCase } from "@/lib/dealConstants";
 import DealChat from "./DealChat";
 import DealDocumentUpload from "./DealDocumentUpload";
 import AttributesSection from "./AttributesSection";
 import UnderwritingSummary from "./UnderwritingSummary";
+import UnderwritingTool from "./UnderwritingTool";
+import DealTabs from "./DealTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -50,20 +53,10 @@ export default async function DealWorkspacePage({
     [id]
   );
 
-  return (
-    <main style={{ padding: 32, maxWidth: 960, margin: "0 auto" }}>
-      <p>
-        <a href="/">&larr; Portfolio</a>
-      </p>
-      <h1>{deal.name}</h1>
-      <p>
-        {deal.asset_class} &middot; {deal.stage} &middot; owner: {deal.owner}
-      </p>
-
+  const overviewTab = (
+    <div>
       <h2>Attributes</h2>
       <AttributesSection attributes={attributes} />
-
-      <UnderwritingSummary attributes={attributes} />
 
       <h2>Documents</h2>
       <DealDocumentUpload dealId={deal.id} />
@@ -86,6 +79,32 @@ export default async function DealWorkspacePage({
       </p>
 
       <DealChat dealId={deal.id} />
+    </div>
+  );
+
+  const underwritingTab = (
+    <div>
+      <UnderwritingSummary attributes={attributes} />
+      <UnderwritingTool attributes={attributes} />
+    </div>
+  );
+
+  return (
+    <main style={{ padding: 32, maxWidth: 960, margin: "0 auto" }}>
+      <p>
+        <a href="/">&larr; Portfolio</a>
+      </p>
+      <h1>{deal.name}</h1>
+      <p style={{ marginBottom: 24 }}>
+        {titleCase(deal.asset_class)} &middot; {titleCase(deal.stage)} &middot; owner: {deal.owner}
+      </p>
+
+      <DealTabs
+        tabs={[
+          { label: "Overview", content: overviewTab },
+          { label: "Underwriting", content: underwritingTab },
+        ]}
+      />
     </main>
   );
 }
