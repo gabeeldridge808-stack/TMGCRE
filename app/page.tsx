@@ -2,7 +2,9 @@ import { query } from "@/lib/db";
 import { filterDealsByQuery, filterDealsByFacets } from "@/lib/dealSearch";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 import { getCurrentUser } from "@/lib/session";
+import type { DateAttributeRow } from "@/lib/keyDates";
 import PortfolioTable from "./PortfolioTable";
+import KeyDatesWidget from "./KeyDatesWidget";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,13 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
   const currentUser = await getCurrentUser();
   const isAdmin = currentUser?.role === "admin";
 
+  const dateAttrRows = await query<DateAttributeRow>(
+    `select da.deal_id, d.name as deal_name, da.key, da.value
+     from deal_attributes da
+     join deals d on d.id = da.deal_id
+     where da.key in ('closing_date', 'rate_lock_date') and d.stage not in ('closed', 'dead')`
+  );
+
   return (
     <main className="page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -43,6 +52,8 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
           Board view
         </a>
       </div>
+
+      <KeyDatesWidget rows={dateAttrRows} />
 
       <form method="get" style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <input
