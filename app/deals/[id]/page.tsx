@@ -11,6 +11,7 @@ import DealTabs from "./DealTabs";
 import CompsImport from "./CompsImport";
 import CompsTable from "./CompsTable";
 import AuditLogSection from "./AuditLogSection";
+import IcMemoTool from "./IcMemoTool";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,8 @@ export default async function DealWorkspacePage({
 
   const activityTab = <AuditLogSection entries={auditEntries} />;
 
+  const memoTab = <IcMemoTool dealId={deal.id} />;
+
   return (
     <main className="page">
       <a href="/" className="back-link">
@@ -158,6 +161,7 @@ export default async function DealWorkspacePage({
           { label: "Overview", content: overviewTab },
           { label: "Underwriting", content: underwritingTab },
           { label: "Comps", content: compsTab },
+          { label: "IC Memo", content: memoTab },
           { label: "Activity", content: activityTab },
         ]}
       />
