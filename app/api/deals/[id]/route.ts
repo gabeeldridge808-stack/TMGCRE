@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query, queryOrThrow } from "@/lib/db";
 import { describeDealWriteError } from "@/lib/deals";
 import { getCurrentUser } from "@/lib/session";
+import { recordAuditLog } from "@/lib/auditLog";
 
 interface Deal {
   id: string;
@@ -70,6 +71,9 @@ export async function PATCH(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
+  const currentUser = await getCurrentUser();
+  if (currentUser) await recordAuditLog(currentUser, { dealId: id, action: "deal.updated" });
+
   if (attributes && typeof attributes === "object") {
     for (const [key, value] of Object.entries(attributes)) {
       await query(
@@ -94,6 +98,17 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  const [deal] = await query<{ id: string; name: string }>(`select id, name from deals where id = $1`, [id]);
+  if (!deal) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  // Logged before the delete, not after: audit_log.deal_id references
+  // deals(id) — once the deal row is gone, an insert naming it as deal_id
+  // would fail its own foreign key. The deal name goes into `details` so
+  // the entry stays meaningful once ON DELETE SET NULL nulls deal_id out.
+  await recordAuditLog(currentUser, { dealId: id, action: "deal.deleted", details: { name: deal.name } });
+
   const deleted = await query<{ id: string }>(
     `delete from deals where id = $1 returning id`,
     [id]

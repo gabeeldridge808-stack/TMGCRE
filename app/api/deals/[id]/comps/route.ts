@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOrThrow } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
+import { recordAuditLog } from "@/lib/auditLog";
 
 interface Comp {
   id: string;
@@ -121,6 +123,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       { status: 500 }
     );
   }
+
+  const user = await getCurrentUser();
+  if (user) await recordAuditLog(user, { dealId, action: "comps.imported", details: { count: inserted } });
 
   return NextResponse.json({ inserted }, { status: 201 });
 }

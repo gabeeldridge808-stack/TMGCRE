@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { buildDealPayload } from "@/lib/dealForm";
 import { createDeal, describeDealWriteError } from "@/lib/deals";
+import { getCurrentUser } from "@/lib/session";
+import { recordAuditLog } from "@/lib/auditLog";
 
 export interface CreateDealState {
   error?: string;
@@ -30,6 +32,9 @@ export async function createDealAction(
   } catch (error) {
     return { error: describeDealWriteError(error).message };
   }
+
+  const user = await getCurrentUser();
+  if (user) await recordAuditLog(user, { dealId, action: "deal.created" });
 
   redirect(`/deals/${dealId}`);
 }

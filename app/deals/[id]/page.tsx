@@ -10,6 +10,7 @@ import UnderwritingTool from "./UnderwritingTool";
 import DealTabs from "./DealTabs";
 import CompsImport from "./CompsImport";
 import CompsTable from "./CompsTable";
+import AuditLogSection from "./AuditLogSection";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,11 @@ export default async function DealWorkspacePage({
     [id]
   );
 
+  const auditEntries = await query<{ id: string; user_name: string; action: string; details: Record<string, unknown>; created_at: string }>(
+    `select id, user_name, action, details, created_at from audit_log where deal_id = $1 order by created_at desc limit 100`,
+    [id]
+  );
+
   const overviewTab = (
     <div>
       <h2>Attributes</h2>
@@ -126,6 +132,8 @@ export default async function DealWorkspacePage({
     </div>
   );
 
+  const activityTab = <AuditLogSection entries={auditEntries} />;
+
   return (
     <main className="page">
       <a href="/" className="back-link">
@@ -150,6 +158,7 @@ export default async function DealWorkspacePage({
           { label: "Overview", content: overviewTab },
           { label: "Underwriting", content: underwritingTab },
           { label: "Comps", content: compsTab },
+          { label: "Activity", content: activityTab },
         ]}
       />
     </main>

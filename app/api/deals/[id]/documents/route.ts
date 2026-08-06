@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { query } from "@/lib/db";
 import { processUploadedDocument } from "@/lib/documents";
+import { getCurrentUser } from "@/lib/session";
+import { recordAuditLog } from "@/lib/auditLog";
 
 // Embedding + attribute-extraction (3 parallel Claude calls, one per
 // schema section — see lib/attributeSchemas.ts) can run long on a real
@@ -72,6 +74,16 @@ export async function POST(
       filename: file.name,
       mimeType: file.type,
     });
+
+    const user = await getCurrentUser();
+    if (user) {
+      await recordAuditLog(user, {
+        dealId,
+        action: "document.uploaded",
+        details: { filename: file.name, attributesAdded: result.attributesAdded },
+      });
+    }
+
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return NextResponse.json(

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { createDeal, describeDealWriteError, type Deal } from "@/lib/deals";
+import { getCurrentUser } from "@/lib/session";
+import { recordAuditLog } from "@/lib/auditLog";
 
 export async function GET() {
   const deals = await query<Deal>(
@@ -22,6 +24,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const deal = await createDeal({ name, asset_class, stage: stage || "sourcing", owner });
+    const user = await getCurrentUser();
+    if (user) await recordAuditLog(user, { dealId: deal.id, action: "deal.created" });
     return NextResponse.json(deal, { status: 201 });
   } catch (error) {
     const { status, message } = describeDealWriteError(error);
