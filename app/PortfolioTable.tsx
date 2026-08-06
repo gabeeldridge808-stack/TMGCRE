@@ -14,7 +14,7 @@ interface Deal {
   owner: string;
 }
 
-export default function PortfolioTable({ deals }: { deals: Deal[] }) {
+export default function PortfolioTable({ deals, isAdmin }: { deals: Deal[]; isAdmin: boolean }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(false);
@@ -81,7 +81,7 @@ export default function PortfolioTable({ deals }: { deals: Deal[] }) {
 
   return (
     <div>
-      {selected.size > 0 && (
+      {isAdmin && selected.size > 0 && (
         <div
           className="card"
           style={{
@@ -103,9 +103,11 @@ export default function PortfolioTable({ deals }: { deals: Deal[] }) {
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: 32 }}>
-              <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all deals" />
-            </th>
+            {isAdmin && (
+              <th style={{ width: 32 }}>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all deals" />
+              </th>
+            )}
             <th>Name</th>
             <th>Asset Class</th>
             <th>Stage</th>
@@ -116,14 +118,16 @@ export default function PortfolioTable({ deals }: { deals: Deal[] }) {
         <tbody>
           {deals.map((deal) => (
             <tr key={deal.id}>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={selected.has(deal.id)}
-                  onChange={() => toggleOne(deal.id)}
-                  aria-label={`Select ${deal.name}`}
-                />
-              </td>
+              {isAdmin && (
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(deal.id)}
+                    onChange={() => toggleOne(deal.id)}
+                    aria-label={`Select ${deal.name}`}
+                  />
+                </td>
+              )}
               <td>
                 <Link href={`/deals/${deal.id}`} style={{ fontWeight: 500, textDecoration: "none" }}>
                   {deal.name}
@@ -140,9 +144,11 @@ export default function PortfolioTable({ deals }: { deals: Deal[] }) {
                 <Link href={`/deals/${deal.id}/edit`} className="btn btn-secondary btn-sm" style={{ marginRight: 8 }}>
                   Edit
                 </Link>
-                <button onClick={() => deleteOne(deal.id, deal.name)} disabled={pending} className="btn btn-danger btn-sm">
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button onClick={() => deleteOne(deal.id, deal.name)} disabled={pending} className="btn btn-danger btn-sm">
+                    Delete
+                  </button>
+                )}
               </td>
             </tr>
           ))}

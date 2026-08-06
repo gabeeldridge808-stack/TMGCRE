@@ -1,6 +1,7 @@
 import { query } from "@/lib/db";
 import { filterDealsByQuery, filterDealsByFacets } from "@/lib/dealSearch";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
+import { getCurrentUser } from "@/lib/session";
 import PortfolioTable from "./PortfolioTable";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
     assetClass: assetClassFilter,
     stage: stageFilter,
   });
+
+  const currentUser = await getCurrentUser();
+  const isAdmin = currentUser?.role === "admin";
 
   return (
     <main className="page">
@@ -67,7 +71,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
       {filteredDeals.length === 0 ? (
         <p className="text-muted">No deals match your search.</p>
       ) : (
-        <PortfolioTable deals={filteredDeals} />
+        <PortfolioTable deals={filteredDeals} isAdmin={isAdmin} />
       )}
     </main>
   );

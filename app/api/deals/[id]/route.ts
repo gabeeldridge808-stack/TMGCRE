@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOrThrow } from "@/lib/db";
 import { describeDealWriteError } from "@/lib/deals";
+import { getCurrentUser } from "@/lib/session";
 
 interface Deal {
   id: string;
@@ -87,6 +88,11 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== "admin") {
+    return NextResponse.json({ error: "Only admins can delete deals." }, { status: 403 });
+  }
+
   const { id } = await params;
   const deleted = await query<{ id: string }>(
     `delete from deals where id = $1 returning id`,

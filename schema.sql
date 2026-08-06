@@ -10,6 +10,19 @@
 create extension if not exists "pgcrypto";   -- gen_random_uuid()
 create extension if not exists "vector";     -- pgvector
 
+-- Auth. Credentials-based (bcrypt hash), JWT session cookie signed with
+-- AUTH_SECRET — see lib/auth.ts. No separate sessions table: a JWT carries
+-- (user id, email, role) and is verified statelessly in middleware, so
+-- logging in doesn't require a DB round trip on every request.
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  password_hash text not null,
+  name text not null,
+  role text not null default 'analyst' check (role in ('admin', 'analyst')),
+  created_at timestamptz not null default now()
+);
+
 create table deals (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -22,6 +35,24 @@ create table deals (
 
 create index deals_asset_class_idx on deals (asset_class);
 create index deals_stage_idx on deals (stage);
+
+-- Audit trail: who changed what, when. Append-only — a row here is never
+-- updated or deleted, so it stays a reliable record even after the deal
+-- itself changes again or is deleted (deal_id references ... on delete set
+-- null, not cascade, specifically so the log entry for a deletion survives
+-- the deletion it's recording). user_name is denormalized so the log still
+-- reads correctly if a user account is later removed.
+create table audit_log (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid references deals(id) on delete set null,
+  user_id uuid references users(id) on delete set null,
+  user_name text not null,
+  action text not null,
+  details jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+create index audit_log_deal_id_idx on audit_log (deal_id);
 
 -- Type-specific fields, one row per (deal, attribute). jsonb `value` lets
 -- each asset class define its own attribute set without a schema migration.
