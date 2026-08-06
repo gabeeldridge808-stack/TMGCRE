@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { titleCase } from "@/lib/dealConstants";
+import { titleCase, STAGE_BADGE_VARIANT, type Stage } from "@/lib/dealConstants";
+import Badge from "@/app/Badge";
 
 interface Deal {
   id: string;
@@ -12,16 +13,6 @@ interface Deal {
   stage: string;
   owner: string;
 }
-
-const actionButtonStyle = {
-  padding: "4px 10px",
-  border: "1px solid #d32f2f",
-  borderRadius: 6,
-  color: "#d32f2f",
-  background: "none",
-  cursor: "pointer",
-  fontSize: 13,
-} as const;
 
 export default function PortfolioTable({ deals }: { deals: Deal[] }) {
   const router = useRouter();
@@ -92,40 +83,40 @@ export default function PortfolioTable({ deals }: { deals: Deal[] }) {
     <div>
       {selected.size > 0 && (
         <div
+          className="card"
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "8px 12px",
-            background: "#fdf3f3",
-            border: "1px solid #eecccc",
-            borderRadius: 6,
+            padding: "10px 16px",
             marginBottom: 12,
+            background: "var(--color-accent-bg)",
+            borderColor: "var(--color-accent-bg)",
           }}
         >
-          <span>{selected.size} selected</span>
-          <button onClick={deleteSelected} disabled={pending} style={actionButtonStyle}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{selected.size} selected</span>
+          <button onClick={deleteSelected} disabled={pending} className="btn btn-danger btn-sm">
             {pending ? "Deleting…" : "Delete selected"}
           </button>
         </div>
       )}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table className="table">
         <thead>
-          <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
-            <th style={{ padding: "8px 4px" }}>
+          <tr>
+            <th style={{ width: 32 }}>
               <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all deals" />
             </th>
-            <th style={{ padding: "8px 4px" }}>Name</th>
-            <th style={{ padding: "8px 4px" }}>Asset Class</th>
-            <th style={{ padding: "8px 4px" }}>Stage</th>
-            <th style={{ padding: "8px 4px" }}>Owner</th>
-            <th style={{ padding: "8px 4px" }}></th>
+            <th>Name</th>
+            <th>Asset Class</th>
+            <th>Stage</th>
+            <th>Owner</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
           {deals.map((deal) => (
-            <tr key={deal.id} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={{ padding: "8px 4px" }}>
+            <tr key={deal.id}>
+              <td>
                 <input
                   type="checkbox"
                   checked={selected.has(deal.id)}
@@ -133,17 +124,23 @@ export default function PortfolioTable({ deals }: { deals: Deal[] }) {
                   aria-label={`Select ${deal.name}`}
                 />
               </td>
-              <td style={{ padding: "8px 4px" }}>
-                <Link href={`/deals/${deal.id}`}>{deal.name}</Link>
+              <td>
+                <Link href={`/deals/${deal.id}`} style={{ fontWeight: 500, textDecoration: "none" }}>
+                  {deal.name}
+                </Link>
               </td>
-              <td style={{ padding: "8px 4px" }}>{titleCase(deal.asset_class)}</td>
-              <td style={{ padding: "8px 4px" }}>{titleCase(deal.stage)}</td>
-              <td style={{ padding: "8px 4px" }}>{deal.owner}</td>
-              <td style={{ padding: "8px 4px", textAlign: "right", whiteSpace: "nowrap" }}>
-                <Link href={`/deals/${deal.id}/edit`} style={{ marginRight: 12, fontSize: 13 }}>
+              <td>
+                <Badge variant="neutral">{titleCase(deal.asset_class)}</Badge>
+              </td>
+              <td>
+                <Badge variant={STAGE_BADGE_VARIANT[deal.stage as Stage] ?? "neutral"}>{titleCase(deal.stage)}</Badge>
+              </td>
+              <td className="text-muted">{deal.owner}</td>
+              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                <Link href={`/deals/${deal.id}/edit`} className="btn btn-secondary btn-sm" style={{ marginRight: 8 }}>
                   Edit
                 </Link>
-                <button onClick={() => deleteOne(deal.id, deal.name)} disabled={pending} style={actionButtonStyle}>
+                <button onClick={() => deleteOne(deal.id, deal.name)} disabled={pending} className="btn btn-danger btn-sm">
                   Delete
                 </button>
               </td>

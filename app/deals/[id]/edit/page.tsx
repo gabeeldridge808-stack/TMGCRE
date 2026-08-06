@@ -21,11 +21,11 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <main style={{ padding: 32, maxWidth: 480, margin: "0 auto" }}>
-      <p>
-        <a href={`/deals/${deal.id}`}>&larr; {deal.name}</a>
-      </p>
-      <h1>Edit Deal</h1>
+    <main className="page page-narrow">
+      <a href={`/deals/${deal.id}`} className="back-link">
+        &larr; {deal.name}
+      </a>
+      <h1 style={{ marginBottom: 24 }}>Edit Deal</h1>
       <EditDealForm dealId={deal.id} initial={deal} />
     </main>
   );

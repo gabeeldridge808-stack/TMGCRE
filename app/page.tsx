@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { query } from "@/lib/db";
 import { filterDealsByQuery, filterDealsByFacets } from "@/lib/dealSearch";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
@@ -18,8 +17,6 @@ interface PortfolioPageProps {
   searchParams?: Promise<{ q?: string; asset_class?: string; stage?: string }>;
 }
 
-const fieldStyle = { padding: "10px 12px", border: "1px solid #ccc", borderRadius: 6, fontSize: 16 } as const;
-
 export default async function PortfolioPage({ searchParams }: PortfolioPageProps) {
   const params = await searchParams;
   const search = params?.q ?? "";
@@ -35,22 +32,18 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
   });
 
   return (
-    <main style={{ padding: 32, maxWidth: 960, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>Portfolio</h1>
-        <Link href="/deals/new" style={{ padding: "8px 12px", border: "1px solid #ccc", borderRadius: 6, textDecoration: "none" }}>
-          New deal
-        </Link>
-      </div>
+    <main className="page">
+      <h1 style={{ marginBottom: 24 }}>Portfolio</h1>
 
       <form method="get" style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <input
+          className="field"
           name="q"
           defaultValue={search}
           placeholder="Search deals by name, asset class, stage, or owner"
-          style={{ ...fieldStyle, flex: "1 1 260px" }}
+          style={{ flex: "1 1 260px" }}
         />
-        <select name="asset_class" defaultValue={assetClassFilter} style={fieldStyle}>
+        <select className="field" name="asset_class" defaultValue={assetClassFilter} style={{ width: "auto" }}>
           <option value="">All Asset Classes</option>
           {ASSET_CLASSES.map((ac) => (
             <option key={ac} value={ac}>
@@ -58,7 +51,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
             </option>
           ))}
         </select>
-        <select name="stage" defaultValue={stageFilter} style={fieldStyle}>
+        <select className="field" name="stage" defaultValue={stageFilter} style={{ width: "auto" }}>
           <option value="">All Stages</option>
           {STAGES.map((s) => (
             <option key={s} value={s}>
@@ -66,12 +59,16 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
             </option>
           ))}
         </select>
-        <button type="submit" style={{ ...fieldStyle, cursor: "pointer" }}>
+        <button type="submit" className="btn btn-secondary">
           Filter
         </button>
       </form>
 
-      {filteredDeals.length === 0 ? <p>No deals match your search.</p> : <PortfolioTable deals={filteredDeals} />}
+      {filteredDeals.length === 0 ? (
+        <p className="text-muted">No deals match your search.</p>
+      ) : (
+        <PortfolioTable deals={filteredDeals} />
+      )}
     </main>
   );
 }

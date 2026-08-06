@@ -58,15 +58,13 @@ export default function DealChat({ dealId }: { dealId: string }) {
   return (
     <section style={{ marginTop: 32 }}>
       <h2>Ask the deal</h2>
-      <p style={{ color: "#666", marginTop: -8 }}>
+      <p className="text-muted" style={{ marginTop: -8, marginBottom: 16, fontSize: 14 }}>
         Grounded in this deal&apos;s recorded attributes and indexed documents.
       </p>
 
       <div
+        className="card"
         style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 16,
           minHeight: 80,
           maxHeight: 480,
           overflowY: "auto",
@@ -74,16 +72,16 @@ export default function DealChat({ dealId }: { dealId: string }) {
         }}
       >
         {messages.length === 0 ? (
-          <p style={{ color: "#999" }}>
+          <p className="text-faint" style={{ margin: 0 }}>
             No questions yet. Try &quot;what are the key risks in this deal?&quot;
           </p>
         ) : (
           messages.map((m, i) => (
             <div key={i} style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13, color: "var(--color-text-muted)" }}>
                 {m.role === "user" ? "You" : "Analyst"}
               </div>
-              <div style={{ whiteSpace: "pre-wrap" }}>
+              <div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>
                 {m.content || (loading && i === messages.length - 1 ? "…" : "")}
               </div>
             </div>
@@ -91,7 +89,7 @@ export default function DealChat({ dealId }: { dealId: string }) {
         )}
       </div>
 
-      {error && <p style={{ color: "#b00020" }}>{error}</p>}
+      {error && <p className="text-danger">{error}</p>}
 
       <form
         onSubmit={(e) => {
@@ -101,13 +99,13 @@ export default function DealChat({ dealId }: { dealId: string }) {
         style={{ display: "flex", gap: 8 }}
       >
         <input
+          className="field"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about this deal's underwriting, risks, terms..."
           disabled={loading}
-          style={{ flex: 1, padding: 10, border: "1px solid #ccc", borderRadius: 6 }}
         />
-        <button type="submit" disabled={loading || !input.trim()} style={{ padding: "10px 16px" }}>
+        <button type="submit" disabled={loading || !input.trim()} className="btn btn-primary">
           {loading ? "Thinking…" : "Ask"}
         </button>
       </form>

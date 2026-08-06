@@ -7,6 +7,18 @@ export const STAGES = ["sourcing", "underwriting", "diligence", "closing", "clos
 export type AssetClass = (typeof ASSET_CLASSES)[number];
 export type Stage = (typeof STAGES)[number];
 
+// Which badge color reads a stage at a glance — a quick visual signal of
+// where a deal sits in the pipeline (active/blue, caution/amber,
+// won/green, lost/red) rather than one flat color for every stage.
+export const STAGE_BADGE_VARIANT: Record<Stage, "neutral" | "info" | "warning" | "success" | "danger"> = {
+  sourcing: "neutral",
+  underwriting: "info",
+  diligence: "warning",
+  closing: "info",
+  closed: "success",
+  dead: "danger",
+};
+
 export function titleCase(value: string): string {
   return value
     .split(/[_\s]+/)

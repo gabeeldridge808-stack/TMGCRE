@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
-import { titleCase } from "@/lib/dealConstants";
+import { titleCase, STAGE_BADGE_VARIANT, type Stage } from "@/lib/dealConstants";
+import Badge from "@/app/Badge";
 import DealChat from "./DealChat";
 import DealDocumentUpload from "./DealDocumentUpload";
 import AttributesSection from "./AttributesSection";
@@ -62,9 +63,11 @@ export default async function DealWorkspacePage({
       <DealDocumentUpload dealId={deal.id} />
 
       {files.length === 0 ? (
-        <p style={{ color: "#666", marginTop: 12 }}>No documents uploaded yet.</p>
+        <p className="text-muted" style={{ marginTop: 12 }}>
+          No documents uploaded yet.
+        </p>
       ) : (
-        <ul style={{ marginTop: 12 }}>
+        <ul style={{ marginTop: 12, paddingLeft: 20 }}>
           {files.map((f) => (
             <li key={f.source_filename}>
               {f.source_filename} — {f.chunk_count} chunk(s)
@@ -73,7 +76,7 @@ export default async function DealWorkspacePage({
         </ul>
       )}
 
-      <p style={{ color: "#999", fontSize: 13, marginTop: 12 }}>
+      <p className="text-faint" style={{ marginTop: 12 }}>
         For bulk loading from a Google Drive folder instead, see{" "}
         <code>npm run ingest -- --deal-id {deal.id} --drive-folder-id &lt;folder-id&gt;</code>.
       </p>
@@ -90,19 +93,23 @@ export default async function DealWorkspacePage({
   );
 
   return (
-    <main style={{ padding: 32, maxWidth: 960, margin: "0 auto" }}>
-      <p>
-        <a href="/">&larr; Portfolio</a>
-      </p>
+    <main className="page">
+      <a href="/" className="back-link">
+        &larr; Portfolio
+      </a>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-        <h1 style={{ margin: 0 }}>{deal.name}</h1>
-        <a href={`/deals/${deal.id}/edit`} style={{ fontSize: 14 }}>
+        <h1>{deal.name}</h1>
+        <a href={`/deals/${deal.id}/edit`} className="btn btn-secondary btn-sm">
           Edit
         </a>
       </div>
-      <p style={{ marginBottom: 24 }}>
-        {titleCase(deal.asset_class)} &middot; {titleCase(deal.stage)} &middot; owner: {deal.owner}
-      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, marginBottom: 24 }}>
+        <Badge variant="neutral">{titleCase(deal.asset_class)}</Badge>
+        <Badge variant={STAGE_BADGE_VARIANT[deal.stage as Stage] ?? "neutral"}>{titleCase(deal.stage)}</Badge>
+        <span className="text-muted" style={{ fontSize: 14 }}>
+          owner: {deal.owner}
+        </span>
+      </div>
 
       <DealTabs
         tabs={[

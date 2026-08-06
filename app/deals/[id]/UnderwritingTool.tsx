@@ -8,8 +8,6 @@ import {
   type UnderwritingInputs,
 } from "@/lib/underwritingModel";
 
-const fieldStyle = { display: "block", width: "100%", padding: 8, marginTop: 4 } as const;
-
 interface FieldSpec {
   key: keyof UnderwritingInputs;
   label: string;
@@ -54,33 +52,41 @@ export default function UnderwritingTool({ attributes }: { attributes: { key: st
 
   return (
     <div>
-      <p style={{ color: "#666", fontSize: 13, marginTop: 0 }}>
+      <p className="text-muted" style={{ fontSize: 13, marginTop: 0 }}>
         A quick single-scenario pro forma — constant NOI growth, one loan, a cap-rate exit. Not a substitute for a
         full model, but enough to sanity-check whether a deal is worth taking further. Fields are pre-filled from
         this deal&rsquo;s extracted attributes where available; edit anything to test a different scenario.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
-        {INPUT_FIELDS.map((field) => (
-          <label key={field.key}>
-            {field.label} {field.suffix && <span style={{ color: "#999" }}>({field.suffix})</span>}
-            <input
-              type="number"
-              step={field.step ?? "any"}
-              value={inputs[field.key]}
-              onChange={(e) => setField(field.key, e.target.value)}
-              style={fieldStyle}
-            />
-          </label>
-        ))}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3>Assumptions</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+          {INPUT_FIELDS.map((field) => (
+            <label key={field.key}>
+              {field.label} {field.suffix && <span className="text-faint">({field.suffix})</span>}
+              <input
+                className="field"
+                type="number"
+                step={field.step ?? "any"}
+                value={inputs[field.key]}
+                onChange={(e) => setField(field.key, e.target.value)}
+                style={{ marginTop: 4 }}
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12, marginBottom: 24 }}>
         <ResultTile label="Going-In Cap Rate" value={pct(results.goingInCapRate)} />
         <ResultTile label="Total Equity Required" value={money(results.equityRequired)} />
         <ResultTile label="Loan Amount" value={money(results.loanAmount)} />
         <ResultTile label="Annual Debt Service" value={money(results.annualDebtService)} />
-        <ResultTile label="Year 1 DSCR" value={results.dscr === null ? "—" : `${results.dscr.toFixed(2)}x`} flag={results.dscr !== null && results.dscr < 1.2} />
+        <ResultTile
+          label="Year 1 DSCR"
+          value={results.dscr === null ? "—" : `${results.dscr.toFixed(2)}x`}
+          flag={results.dscr !== null && results.dscr < 1.2}
+        />
         <ResultTile label="Avg. Cash-on-Cash" value={pct(results.averageCashOnCashPct)} />
         <ResultTile label="Unlevered IRR" value={pct(results.unleveredIrrPct)} />
         <ResultTile label="Levered IRR" value={pct(results.leveredIrrPct)} highlight />
@@ -89,28 +95,31 @@ export default function UnderwritingTool({ attributes }: { attributes: { key: st
         <ResultTile label="Net Sale Proceeds" value={money(results.netSaleProceeds)} />
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-        <thead>
-          <tr style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>
-            <th style={{ textAlign: "left", padding: "6px 8px" }}>Year</th>
-            <th style={{ padding: "6px 8px" }}>NOI</th>
-            <th style={{ padding: "6px 8px" }}>Debt Service</th>
-            <th style={{ padding: "6px 8px" }}>Cash Flow</th>
-            <th style={{ padding: "6px 8px" }}>Cash-on-Cash</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.yearlyProjections.map((y) => (
-            <tr key={y.year} style={{ borderBottom: "1px solid #eee", textAlign: "right" }}>
-              <td style={{ textAlign: "left", padding: "6px 8px" }}>{y.year}</td>
-              <td style={{ padding: "6px 8px" }}>{money(y.noi)}</td>
-              <td style={{ padding: "6px 8px" }}>{money(y.debtService)}</td>
-              <td style={{ padding: "6px 8px" }}>{money(y.cashFlowBeforeTax)}</td>
-              <td style={{ padding: "6px 8px" }}>{pct(y.cashOnCashPct)}</td>
+      <div className="card" style={{ overflowX: "auto" }}>
+        <h3>Year-by-Year Projection</h3>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th style={{ textAlign: "right" }}>NOI</th>
+              <th style={{ textAlign: "right" }}>Debt Service</th>
+              <th style={{ textAlign: "right" }}>Cash Flow</th>
+              <th style={{ textAlign: "right" }}>Cash-on-Cash</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {results.yearlyProjections.map((y) => (
+              <tr key={y.year}>
+                <td>{y.year}</td>
+                <td style={{ textAlign: "right" }}>{money(y.noi)}</td>
+                <td style={{ textAlign: "right" }}>{money(y.debtService)}</td>
+                <td style={{ textAlign: "right" }}>{money(y.cashFlowBeforeTax)}</td>
+                <td style={{ textAlign: "right" }}>{pct(y.cashOnCashPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -126,17 +135,11 @@ function ResultTile({
   flag?: boolean;
   highlight?: boolean;
 }) {
+  const className = flag ? "stat-tile stat-tile-flag" : highlight ? "stat-tile stat-tile-highlight" : "stat-tile";
   return (
-    <div
-      style={{
-        padding: 12,
-        border: `1px solid ${flag ? "#e0a030" : "#ddd"}`,
-        borderRadius: 8,
-        background: highlight ? "#f7f9fc" : undefined,
-      }}
-    >
-      <div style={{ fontSize: 12, color: "#666" }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 600, color: flag ? "#b06000" : undefined }}>{value}</div>
+    <div className={className}>
+      <div className="stat-label">{label}</div>
+      <div className={flag ? "stat-value stat-value-flag" : "stat-value"}>{value}</div>
     </div>
   );
 }

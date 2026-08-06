@@ -5,7 +5,6 @@ import { createDealAction, type CreateDealState } from "./actions";
 import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 
 const initialState: CreateDealState = {};
-const fieldStyle = { display: "block", width: "100%", padding: 8, marginTop: 4 } as const;
 
 export default function NewDealForm() {
   const [state, formAction, pending] = useActionState(createDealAction, initialState);
@@ -19,19 +18,27 @@ export default function NewDealForm() {
   const [owner, setOwner] = useState("");
 
   return (
-    <form action={formAction} style={{ display: "grid", gap: 12 }}>
+    <form action={formAction} className="card" style={{ display: "grid", gap: 16 }}>
       <label>
         Name
-        <input name="name" required value={name} onChange={(e) => setName(e.target.value)} style={fieldStyle} />
+        <input
+          className="field"
+          name="name"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ marginTop: 4 }}
+        />
       </label>
       <label>
         Asset Class
         <select
+          className="field"
           name="asset_class"
           required
           value={assetClass}
           onChange={(e) => setAssetClass(e.target.value)}
-          style={fieldStyle}
+          style={{ marginTop: 4 }}
         >
           <option value="" disabled>
             Select asset class…
@@ -45,7 +52,13 @@ export default function NewDealForm() {
       </label>
       <label>
         Stage
-        <select name="stage" value={stage} onChange={(e) => setStage(e.target.value)} style={fieldStyle}>
+        <select
+          className="field"
+          name="stage"
+          value={stage}
+          onChange={(e) => setStage(e.target.value)}
+          style={{ marginTop: 4 }}
+        >
           {STAGES.map((s) => (
             <option key={s} value={s}>
               {titleCase(s)}
@@ -55,12 +68,19 @@ export default function NewDealForm() {
       </label>
       <label>
         Owner
-        <input name="owner" required value={owner} onChange={(e) => setOwner(e.target.value)} style={fieldStyle} />
+        <input
+          className="field"
+          name="owner"
+          required
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          style={{ marginTop: 4 }}
+        />
       </label>
 
-      {state.error && <p style={{ color: "#b00020", margin: 0 }}>{state.error}</p>}
+      {state.error && <p className="text-danger" style={{ margin: 0, fontSize: 14 }}>{state.error}</p>}
 
-      <button type="submit" disabled={pending} style={{ padding: "10px 14px", cursor: "pointer" }}>
+      <button type="submit" disabled={pending} className="btn btn-primary">
         {pending ? "Creating…" : "Create deal"}
       </button>
     </form>

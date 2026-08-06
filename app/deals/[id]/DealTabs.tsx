@@ -7,21 +7,12 @@ export default function DealTabs({ tabs }: { tabs: { label: string; content: Rea
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #ddd", marginBottom: 20 }}>
+      <div className="tab-bar">
         {tabs.map((tab, i) => (
           <button
             key={tab.label}
             onClick={() => setActive(i)}
-            style={{
-              padding: "10px 16px",
-              border: "none",
-              borderBottom: i === active ? "2px solid #111" : "2px solid transparent",
-              background: "none",
-              fontWeight: i === active ? 600 : 400,
-              fontSize: 15,
-              cursor: "pointer",
-              color: i === active ? "#111" : "#666",
-            }}
+            className={`tab-button${i === active ? " active" : ""}`}
           >
             {tab.label}
           </button>

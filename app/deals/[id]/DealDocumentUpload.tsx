@@ -72,20 +72,20 @@ export default function DealDocumentUpload({ dealId }: { dealId: string }) {
           }
         }}
       />
-      <p style={{ color: "#999", fontSize: 13, marginTop: 4 }}>
+      <p className="text-faint" style={{ marginTop: 4 }}>
         PDF, Word (.docx), or plain text. Max 4.5MB per file.
       </p>
 
-      {status === "processing" && <p>Uploading and indexing…</p>}
-      {error && <p style={{ color: "#b00020" }}>{error}</p>}
+      {status === "processing" && <p className="text-muted">Uploading and indexing…</p>}
+      {error && <p className="text-danger">{error}</p>}
 
       {results.length > 0 && (
-        <ul style={{ marginTop: 8 }}>
+        <ul style={{ marginTop: 8, paddingLeft: 20 }}>
           {results.map((r, i) => (
             <li key={i}>
               <strong>{r.filename}</strong>
               {r.warning ? (
-                <span style={{ color: "#b06000" }}> — {r.warning}</span>
+                <span style={{ color: "var(--color-warning)" }}> — {r.warning}</span>
               ) : (
                 <>
                   {" "}
