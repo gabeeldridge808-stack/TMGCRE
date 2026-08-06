@@ -4,6 +4,7 @@
 // copies of them.
 import { queryOrThrow } from "@/lib/db";
 import { ASSET_CLASSES, STAGES } from "@/lib/dealConstants";
+import { ensureChecklistForStage } from "@/lib/checklist";
 
 export interface Deal {
   id: string;
@@ -30,6 +31,7 @@ export async function createDeal(input: CreateDealInput): Promise<Deal> {
      returning *`,
     [input.name, input.asset_class, input.stage, input.owner]
   );
+  await ensureChecklistForStage(deal.id, deal.stage);
   return deal;
 }
 
@@ -44,6 +46,7 @@ export async function updateDeal(id: string, input: CreateDealInput): Promise<De
   if (!deal) {
     throw new Error("not found");
   }
+  await ensureChecklistForStage(deal.id, deal.stage);
   return deal;
 }
 

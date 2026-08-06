@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
 import { titleCase, STAGE_BADGE_VARIANT, type Stage } from "@/lib/dealConstants";
+import { ensureChecklistForStage } from "@/lib/checklist";
 import Badge from "@/app/Badge";
 import DealChat from "./DealChat";
 import DealDocumentUpload from "./DealDocumentUpload";
@@ -12,6 +13,7 @@ import CompsImport from "./CompsImport";
 import CompsTable from "./CompsTable";
 import AuditLogSection from "./AuditLogSection";
 import IcMemoTool from "./IcMemoTool";
+import ChecklistSection from "./ChecklistSection";
 
 export const dynamic = "force-dynamic";
 
@@ -60,9 +62,19 @@ export default async function DealWorkspacePage({
     notFound();
   }
 
+  // Defensive, not just belt-and-suspenders: this covers deals created
+  // before checklists existed, which never went through createDeal/
+  // updateDeal's seeding. Idempotent and cheap when already seeded.
+  await ensureChecklistForStage(deal.id, deal.stage);
+
   const attributes = await query<DealAttribute>(
     `select key, value from deal_attributes where deal_id = $1 order by key`,
     [id]
+  );
+
+  const checklistItems = await query<{ id: string; label: string; done: boolean }>(
+    `select id, label, done from deal_checklist_items where deal_id = $1 and stage = $2 order by sort_order`,
+    [id, deal.stage]
   );
 
   const files = await query<DocumentFile>(
@@ -90,6 +102,8 @@ export default async function DealWorkspacePage({
 
   const overviewTab = (
     <div>
+      <ChecklistSection dealId={deal.id} stage={deal.stage} items={checklistItems} />
+
       <h2>Attributes</h2>
       <AttributesSection attributes={attributes} />
 

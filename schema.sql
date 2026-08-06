@@ -150,24 +150,53 @@ create table comps (
 
 create index comps_deal_id_idx on comps (deal_id);
 
--- Checklist tables: deliberately empty and unused. Not building checklist
--- logic until 2-3 real deals of the same asset class exist to templatize
--- from — see README.md.
+-- Stage-transition checklists. checklist_templates is seed data (one row
+-- per default item per stage, asset-class-agnostic for now); when a deal
+-- enters a stage for the first time, lib/checklist.ts copies that stage's
+-- template rows into deal_checklist_items for that specific deal. Copying
+-- rather than referencing a template means checking an item off — or a
+-- template changing later — never rewrites another deal's history.
 create table checklist_templates (
   id uuid primary key default gen_random_uuid(),
-  asset_class text not null,
-  name text not null,
-  items jsonb not null default '[]',
-  created_at timestamptz not null default now()
+  stage text not null check (stage in ('sourcing', 'underwriting', 'diligence', 'closing', 'closed', 'dead')),
+  label text not null,
+  sort_order int not null default 0
 );
 
 create table deal_checklist_items (
   id uuid primary key default gen_random_uuid(),
   deal_id uuid not null references deals(id) on delete cascade,
-  template_id uuid references checklist_templates(id),
+  stage text not null,
   label text not null,
   done boolean not null default false,
+  sort_order int not null default 0,
   created_at timestamptz not null default now()
 );
+
+create index deal_checklist_items_deal_id_idx on deal_checklist_items (deal_id);
+
+insert into checklist_templates (stage, label, sort_order) values
+  ('sourcing', 'Screen against investment criteria', 1),
+  ('sourcing', 'OM / broker package received', 2),
+  ('sourcing', 'Preliminary underwriting pass', 3),
+  ('underwriting', 'Full pro forma built', 1),
+  ('underwriting', 'Comps pulled', 2),
+  ('underwriting', 'Site visit scheduled', 3),
+  ('underwriting', 'LOI drafted', 4),
+  ('diligence', 'PSA executed', 1),
+  ('diligence', 'Earnest money deposited', 2),
+  ('diligence', 'Phase 1 ESA ordered', 3),
+  ('diligence', 'Title report ordered', 4),
+  ('diligence', 'Survey ordered', 5),
+  ('diligence', 'Rent roll / lease audit', 6),
+  ('diligence', 'Lender engaged / term sheet', 7),
+  ('closing', 'Loan committee approval', 1),
+  ('closing', 'Title cleared', 2),
+  ('closing', 'Insurance bound', 3),
+  ('closing', 'Closing docs drafted', 4),
+  ('closing', 'Wire instructions confirmed', 5),
+  ('closed', 'Post-closing file archived', 1),
+  ('closed', 'Property management transition', 2),
+  ('closed', 'Investor reporting set up', 3);
 
 create index deal_checklist_items_deal_id_idx on deal_checklist_items (deal_id);

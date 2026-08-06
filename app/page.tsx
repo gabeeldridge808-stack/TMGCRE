@@ -37,7 +37,12 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
 
   return (
     <main className="page">
-      <h1 style={{ marginBottom: 24 }}>Portfolio</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <h1 style={{ margin: 0 }}>Portfolio</h1>
+        <a href="/board" className="btn btn-secondary btn-sm">
+          Board view
+        </a>
+      </div>
 
       <form method="get" style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <input

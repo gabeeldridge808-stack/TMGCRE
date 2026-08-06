@@ -3,6 +3,7 @@ import { query, queryOrThrow } from "@/lib/db";
 import { describeDealWriteError } from "@/lib/deals";
 import { getCurrentUser } from "@/lib/session";
 import { recordAuditLog } from "@/lib/auditLog";
+import { ensureChecklistForStage } from "@/lib/checklist";
 
 interface Deal {
   id: string;
@@ -73,6 +74,8 @@ export async function PATCH(
 
   const currentUser = await getCurrentUser();
   if (currentUser) await recordAuditLog(currentUser, { dealId: id, action: "deal.updated" });
+
+  await ensureChecklistForStage(deal.id, deal.stage);
 
   if (attributes && typeof attributes === "object") {
     for (const [key, value] of Object.entries(attributes)) {
