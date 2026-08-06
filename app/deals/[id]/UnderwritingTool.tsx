@@ -8,6 +8,7 @@ import {
   runUnderwritingModel,
   type UnderwritingInputs,
 } from "@/lib/underwritingModel";
+import { computeCompsSummary } from "@/lib/compsStats";
 
 interface FieldSpec {
   key: keyof UnderwritingInputs;
@@ -37,11 +38,29 @@ function pct(n: number | null): string {
   return n === null ? "—" : `${n.toFixed(1)}%`;
 }
 
-export default function UnderwritingTool({ attributes }: { attributes: { key: string; value: unknown }[] }) {
-  const [inputs, setInputs] = useState<UnderwritingInputs>(() => ({
-    ...DEFAULT_UNDERWRITING_INPUTS,
-    ...deriveInputsFromAttributes(attributes),
-  }));
+export default function UnderwritingTool({
+  attributes,
+  comps = [],
+}: {
+  attributes: { key: string; value: unknown }[];
+  comps?: { cap_rate: string | null }[];
+}) {
+  const compsAvgCapRate = useMemo(
+    () => computeCompsSummary(comps.map((c) => ({ cap_rate: c.cap_rate ? Number(c.cap_rate) : null }))).avgCapRate,
+    [comps]
+  );
+
+  const [inputs, setInputs] = useState<UnderwritingInputs>(() => {
+    const derived = deriveInputsFromAttributes(attributes);
+    return {
+      ...DEFAULT_UNDERWRITING_INPUTS,
+      // A comps-derived exit cap rate is a better default than the flat
+      // 7% fallback, but an explicit exit_cap_rate attribute (someone
+      // typed it, or it was extracted from a document) still wins.
+      ...(compsAvgCapRate !== null ? { exitCapRate: compsAvgCapRate } : {}),
+      ...derived,
+    };
+  });
 
   const results = useMemo(() => runUnderwritingModel(inputs), [inputs]);
   const sensitivity = useMemo(() => buildSensitivityGrid(inputs), [inputs]);
@@ -74,6 +93,9 @@ export default function UnderwritingTool({ attributes }: { attributes: { key: st
                 onChange={(e) => setField(field.key, e.target.value)}
                 style={{ marginTop: 4 }}
               />
+              {field.key === "exitCapRate" && compsAvgCapRate !== null && (
+                <span className="text-faint">Suggested from {comps.length} comp(s): {compsAvgCapRate.toFixed(2)}%</span>
+              )}
             </label>
           ))}
         </div>

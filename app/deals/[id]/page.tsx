@@ -136,7 +136,7 @@ export default async function DealWorkspacePage({
   const underwritingTab = (
     <div>
       <UnderwritingSummary attributes={attributes} />
-      <UnderwritingTool attributes={attributes} />
+      <UnderwritingTool attributes={attributes} comps={comps} />
     </div>
   );
 
