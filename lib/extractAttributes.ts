@@ -93,7 +93,12 @@ export async function extractAttributesFromText(
   const prompt = buildExtractionPrompt(assetClass, existingKeys, budgeted);
   const sourceFilename = documents.map((d) => d.filename).join(", ");
 
-  const sectionResults = await Promise.all(
+  // allSettled, not all: one section occasionally comes back with an
+  // enum value the model invented outside its allowed set (seen live on
+  // lease_type / center_type), which throws inside messages.parse's own
+  // validation. That must not take down extraction for every other
+  // section in the same upload.
+  const sectionResults = await Promise.allSettled(
     sections.map(async (section) => {
       const message = await client.messages.parse({
         model: MODEL,
@@ -101,7 +106,7 @@ export async function extractAttributesFromText(
         system: EXTRACTION_SYSTEM_PROMPT,
         thinking: { type: "adaptive" },
         // "low" — this is bounded pattern-matching against an explicit
-        // schema, not open-ended reasoning, and it runs 3x in parallel per
+        // schema, not open-ended reasoning, and it runs in parallel per
         // upload inside a request with a hard duration ceiling (see the
         // maxDuration comment in the API route) — "medium" measurably
         // pushed real requests over that ceiling.
@@ -113,7 +118,12 @@ export async function extractAttributesFromText(
   );
 
   const attributes: ExtractedAttribute[] = [];
-  for (const parsed of sectionResults) {
+  for (const result of sectionResults) {
+    if (result.status === "rejected") {
+      console.error("Attribute extraction section failed:", result.reason);
+      continue;
+    }
+    const parsed = result.value;
     if (!parsed) continue;
     for (const [key, value] of Object.entries(parsed)) {
       if (value === undefined || value === null) continue;
