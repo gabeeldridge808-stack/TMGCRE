@@ -28,6 +28,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 Deal Tracker
               </Link>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Link href="/search" className="text-muted" style={{ fontSize: 13, textDecoration: "none" }}>
+                  Search
+                </Link>
                 {user.role === "admin" && (
                   <Link href="/admin/users" className="text-muted" style={{ fontSize: 13, textDecoration: "none" }}>
                     Users
