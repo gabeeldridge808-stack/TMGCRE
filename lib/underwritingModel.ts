@@ -234,3 +234,25 @@ export function runUnderwritingModel(inputs: UnderwritingInputs): UnderwritingRe
     equityMultiple,
   };
 }
+
+export interface SensitivityGrid {
+  exitCapRates: number[];
+  holdPeriods: number[];
+  /** leveredIrrGrid[holdPeriodIndex][exitCapRateIndex] */
+  leveredIrrGrid: (number | null)[][];
+}
+
+const EXIT_CAP_DELTAS = [-1, -0.5, 0, 0.5, 1];
+const HOLD_PERIOD_DELTAS = [-2, -1, 0, 1, 2];
+
+/** Pure: levered IRR across a exit-cap-rate x hold-period grid centered on the given base case. */
+export function buildSensitivityGrid(baseInputs: UnderwritingInputs): SensitivityGrid {
+  const exitCapRates = EXIT_CAP_DELTAS.map((d) => Math.max(0.1, baseInputs.exitCapRate + d));
+  const holdPeriods = HOLD_PERIOD_DELTAS.map((d) => Math.max(1, Math.round(baseInputs.holdPeriodYears + d)));
+
+  const leveredIrrGrid = holdPeriods.map((holdPeriodYears) =>
+    exitCapRates.map((exitCapRate) => runUnderwritingModel({ ...baseInputs, exitCapRate, holdPeriodYears }).leveredIrrPct)
+  );
+
+  return { exitCapRates, holdPeriods, leveredIrrGrid };
+}

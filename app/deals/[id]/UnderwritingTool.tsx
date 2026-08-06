@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   DEFAULT_UNDERWRITING_INPUTS,
+  buildSensitivityGrid,
   deriveInputsFromAttributes,
   runUnderwritingModel,
   type UnderwritingInputs,
@@ -43,6 +44,7 @@ export default function UnderwritingTool({ attributes }: { attributes: { key: st
   }));
 
   const results = useMemo(() => runUnderwritingModel(inputs), [inputs]);
+  const sensitivity = useMemo(() => buildSensitivityGrid(inputs), [inputs]);
 
   function setField(key: keyof UnderwritingInputs, raw: string) {
     const value = raw === "" ? 0 : Number(raw);
@@ -120,8 +122,46 @@ export default function UnderwritingTool({ attributes }: { attributes: { key: st
           </tbody>
         </table>
       </div>
+
+      <div className="card" style={{ overflowX: "auto", marginTop: 20 }}>
+        <h3>Levered IRR Sensitivity</h3>
+        <p className="text-faint" style={{ marginTop: -4, marginBottom: 12 }}>
+          Exit cap rate (columns) x hold period (rows), holding every other assumption fixed.
+        </p>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Hold Period</th>
+              {sensitivity.exitCapRates.map((rate) => (
+                <th key={rate} style={{ textAlign: "right" }}>
+                  {rate.toFixed(2)}%
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sensitivity.holdPeriods.map((years, rowIndex) => (
+              <tr key={years}>
+                <td>{years} yrs</td>
+                {sensitivity.leveredIrrGrid[rowIndex].map((irr, colIndex) => (
+                  <td key={colIndex} style={{ textAlign: "right", ...sensitivityCellStyle(irr) }}>
+                    {pct(irr)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
+}
+
+function sensitivityCellStyle(irr: number | null): CSSProperties {
+  if (irr === null) return {};
+  if (irr < 8) return { color: "var(--color-danger)" };
+  if (irr >= 15) return { color: "var(--color-success)", fontWeight: 600 };
+  return {};
 }
 
 function ResultTile({

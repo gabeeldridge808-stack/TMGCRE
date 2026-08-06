@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeIrr, deriveInputsFromAttributes, runUnderwritingModel } from "@/lib/underwritingModel";
+import { buildSensitivityGrid, computeIrr, deriveInputsFromAttributes, runUnderwritingModel } from "@/lib/underwritingModel";
 
 describe("computeIrr", () => {
   it("solves a simple two-period cash flow", () => {
@@ -99,5 +99,47 @@ describe("deriveInputsFromAttributes", () => {
 
   it("returns an empty object when nothing is known", () => {
     expect(deriveInputsFromAttributes([])).toEqual({});
+  });
+});
+
+describe("buildSensitivityGrid", () => {
+  const baseInputs = {
+    purchasePrice: 1_000_000,
+    closingCostsPct: 2,
+    goingInNoi: 80_000,
+    noiGrowthPct: 3,
+    holdPeriodYears: 5,
+    exitCapRate: 7,
+    sellingCostsPct: 2,
+    loanToValuePct: 65,
+    interestRatePct: 6,
+    amortizationYears: 30,
+  };
+
+  it("is a 5x5 grid centered on the base case", () => {
+    const grid = buildSensitivityGrid(baseInputs);
+
+    expect(grid.exitCapRates).toEqual([6, 6.5, 7, 7.5, 8]);
+    expect(grid.holdPeriods).toEqual([3, 4, 5, 6, 7]);
+    expect(grid.leveredIrrGrid).toHaveLength(5);
+    expect(grid.leveredIrrGrid[2]).toHaveLength(5);
+
+    // Center cell (base hold period, base exit cap) must match a direct run.
+    const centerIrr = grid.leveredIrrGrid[2][2];
+    const directIrr = runUnderwritingModel(baseInputs).leveredIrrPct;
+    expect(centerIrr).toBeCloseTo(directIrr!, 5);
+  });
+
+  it("shows IRR falling as the exit cap rate rises, holding hold period fixed", () => {
+    const grid = buildSensitivityGrid(baseInputs);
+    const rowAtBaseHoldPeriod = grid.leveredIrrGrid[2];
+    for (let i = 1; i < rowAtBaseHoldPeriod.length; i++) {
+      expect(rowAtBaseHoldPeriod[i]!).toBeLessThan(rowAtBaseHoldPeriod[i - 1]!);
+    }
+  });
+
+  it("never produces a hold period below 1 year even with an extreme base case", () => {
+    const grid = buildSensitivityGrid({ ...baseInputs, holdPeriodYears: 1 });
+    expect(Math.min(...grid.holdPeriods)).toBeGreaterThanOrEqual(1);
   });
 });
