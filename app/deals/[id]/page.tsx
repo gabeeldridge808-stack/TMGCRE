@@ -8,6 +8,8 @@ import AttributesSection from "./AttributesSection";
 import UnderwritingSummary from "./UnderwritingSummary";
 import UnderwritingTool from "./UnderwritingTool";
 import DealTabs from "./DealTabs";
+import CompsImport from "./CompsImport";
+import CompsTable from "./CompsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,21 @@ interface DealAttribute {
 interface DocumentFile {
   source_filename: string;
   chunk_count: string;
+}
+
+interface Comp {
+  id: string;
+  property_name: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  sale_date: string | null;
+  sale_price: string | null;
+  price_per_sqft: string | null;
+  price_per_unit: string | null;
+  cap_rate: string | null;
+  building_sqft: string | null;
+  unit_count: string | null;
 }
 
 export default async function DealWorkspacePage({
@@ -51,6 +68,11 @@ export default async function DealWorkspacePage({
      from documents where deal_id = $1
      group by source_filename
      order by max(ingested_at) desc`,
+    [id]
+  );
+
+  const comps = await query<Comp>(
+    `select * from comps where deal_id = $1 order by sale_date desc nulls last, created_at desc`,
     [id]
   );
 
@@ -92,6 +114,13 @@ export default async function DealWorkspacePage({
     </div>
   );
 
+  const compsTab = (
+    <div>
+      <CompsImport dealId={deal.id} />
+      <CompsTable dealId={deal.id} comps={comps} />
+    </div>
+  );
+
   return (
     <main className="page">
       <a href="/" className="back-link">
@@ -115,6 +144,7 @@ export default async function DealWorkspacePage({
         tabs={[
           { label: "Overview", content: overviewTab },
           { label: "Underwriting", content: underwritingTab },
+          { label: "Comps", content: compsTab },
         ]}
       />
     </main>

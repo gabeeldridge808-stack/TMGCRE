@@ -83,6 +83,42 @@ create index documents_embedding_idx on documents
   using ivfflat (embedding vector_cosine_ops)
   with (lists = 100);
 
+-- Sales comps, imported from a CSV export (e.g. a CoStar comps search
+-- exported to CSV from the browser — see lib/compsImport.ts for why this
+-- is a file import, not an automated scrape of CoStar's site). Comps are
+-- deal-scoped, not a shared market-wide table: a comp is imported while
+-- working a specific deal, same lifecycle as that deal's documents.
+-- Columns cover what a comp export commonly has; `extra` keeps whatever
+-- imported columns don't map to a known field, so nothing is silently
+-- dropped.
+create table comps (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid not null references deals(id) on delete cascade,
+
+  property_name text,
+  address text,
+  city text,
+  state text,
+  asset_class text,
+
+  sale_date date,
+  sale_price numeric,
+  price_per_sqft numeric,
+  price_per_unit numeric,
+  cap_rate numeric,
+  building_sqft numeric,
+  unit_count numeric,
+  year_built numeric,
+  buyer text,
+  seller text,
+
+  source text not null default 'CSV import',
+  extra jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+create index comps_deal_id_idx on comps (deal_id);
+
 -- Checklist tables: deliberately empty and unused. Not building checklist
 -- logic until 2-3 real deals of the same asset class exist to templatize
 -- from — see README.md.
