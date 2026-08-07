@@ -14,7 +14,12 @@ export type AuditAction =
   | "document.uploaded"
   | "comps.imported"
   | "comps.deleted"
-  | "attribute.confirmed_via_chat";
+  | "attribute.confirmed_via_chat"
+  | "development.updated"
+  | "milestone.added"
+  | "milestone.updated"
+  | "milestone.deleted"
+  | "condo_unit_sales.logged";
 
 export interface AuditLogEntry {
   dealId?: string | null;
@@ -37,6 +42,11 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "comps.imported": "imported comps",
   "comps.deleted": "deleted a comp",
   "attribute.confirmed_via_chat": "confirmed a chat-proposed attribute",
+  "development.updated": "updated development details",
+  "milestone.added": "added a milestone",
+  "milestone.updated": "updated a milestone",
+  "milestone.deleted": "deleted a milestone",
+  "condo_unit_sales.logged": "logged a unit-sales snapshot",
 };
 
 /** Pure: human-readable label for an audit action, falling back to the raw string for forward-compat with an action added later. */

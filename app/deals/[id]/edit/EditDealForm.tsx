@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { editDealAction, type EditDealState } from "./actions";
-import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
+import { ASSET_CLASSES, STAGES, DEAL_CATEGORIES, DEVELOPMENT_STAGES, DEVELOPMENT_STAGE_LABELS, titleCase } from "@/lib/dealConstants";
 
 const initialState: EditDealState = {};
 
@@ -14,7 +14,14 @@ export default function EditDealForm({
   users,
 }: {
   dealId: string;
-  initial: { name: string; asset_class: string; stage: string; owner_id: string };
+  initial: {
+    name: string;
+    asset_class: string;
+    stage: string;
+    owner_id: string;
+    deal_category: string;
+    development_stage: string | null;
+  };
   isAdmin: boolean;
   /** Only populated for admins — used to reassign a deal's owner. */
   users: { id: string; name: string }[];
@@ -31,6 +38,8 @@ export default function EditDealForm({
   const [assetClass, setAssetClass] = useState(initial.asset_class);
   const [stage, setStage] = useState(initial.stage);
   const [ownerId, setOwnerId] = useState(initial.owner_id);
+  const [dealCategory, setDealCategory] = useState(initial.deal_category);
+  const [developmentStage, setDevelopmentStage] = useState(initial.development_stage ?? "");
 
   return (
     <form action={formAction} className="card" style={{ display: "grid", gap: 16 }}>
@@ -78,6 +87,44 @@ export default function EditDealForm({
           ))}
         </select>
       </label>
+      <label>
+        Deal Type
+        <select
+          className="field"
+          name="deal_category"
+          value={dealCategory}
+          onChange={(e) => setDealCategory(e.target.value)}
+          style={{ marginTop: 4 }}
+        >
+          {DEAL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {titleCase(c)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {dealCategory === "development" && (
+        <label>
+          Development Stage
+          <select
+            className="field"
+            name="development_stage"
+            required
+            value={developmentStage}
+            onChange={(e) => setDevelopmentStage(e.target.value)}
+            style={{ marginTop: 4 }}
+          >
+            <option value="" disabled>
+              Select development stage…
+            </option>
+            {DEVELOPMENT_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {DEVELOPMENT_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {isAdmin && (
         <label>
           Owner

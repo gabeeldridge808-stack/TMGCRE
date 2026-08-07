@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { UPLOADABLE_MIME_TYPES } from "@/lib/dealConstants";
+import { UPLOADABLE_MIME_TYPES, DEVELOPMENT_STAGES, DEVELOPMENT_STAGE_LABELS } from "@/lib/dealConstants";
 
 interface UploadResult {
   filename: string;
@@ -11,15 +11,28 @@ interface UploadResult {
   warning?: string;
 }
 
+const DOCUMENT_TYPES = [
+  "entitlement",
+  "gc_contract",
+  "franchise_agreement",
+  "psa",
+  "cost_report",
+  "lease",
+  "financing_memo",
+  "other",
+];
+
 // Matches Vercel's serverless request body limit — this upload goes through
 // our own API route, not a direct-to-Blob client upload (see README).
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 
-export default function DealDocumentUpload({ dealId }: { dealId: string }) {
+export default function DealDocumentUpload({ dealId, isDevelopment = false }: { dealId: string; isDevelopment?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "processing">("idle");
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<UploadResult[]>([]);
+  const [documentType, setDocumentType] = useState("");
+  const [developmentStage, setDevelopmentStage] = useState("");
 
   async function handleFiles(files: FileList) {
     setError(null);
@@ -36,6 +49,8 @@ export default function DealDocumentUpload({ dealId }: { dealId: string }) {
         setStatus("processing");
         const formData = new FormData();
         formData.append("file", file);
+        if (documentType) formData.append("document_type", documentType);
+        if (developmentStage) formData.append("development_stage", developmentStage);
 
         const res = await fetch(`/api/deals/${dealId}/documents`, {
           method: "POST",
@@ -60,6 +75,37 @@ export default function DealDocumentUpload({ dealId }: { dealId: string }) {
 
   return (
     <div>
+      {isDevelopment && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <label style={{ fontSize: 13 }}>
+            Document Type
+            <select className="field" value={documentType} onChange={(e) => setDocumentType(e.target.value)} style={{ marginTop: 4 }}>
+              <option value="">—</option>
+              {DOCUMENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ fontSize: 13 }}>
+            Development Stage
+            <select
+              className="field"
+              value={developmentStage}
+              onChange={(e) => setDevelopmentStage(e.target.value)}
+              style={{ marginTop: 4 }}
+            >
+              <option value="">—</option>
+              {DEVELOPMENT_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {DEVELOPMENT_STAGE_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <input
         type="file"
         multiple

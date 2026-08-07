@@ -26,6 +26,9 @@ export async function writeDocumentChunks(params: {
   filename: string;
   mimeType: string;
   pages: ExtractedPage[];
+  /** Development-module tagging (schema.sql) -- null for an acquisition deal's documents. */
+  documentType?: string | null;
+  developmentStage?: string | null;
 }): Promise<WriteChunksResult> {
   const chunks: { content: string; contentHash: string; chunkIndex: number; pageNumber: number | null }[] = [];
   let chunkIndex = 0;
@@ -56,8 +59,9 @@ export async function writeDocumentChunks(params: {
     await query(
       `insert into documents
          (deal_id, drive_file_id, drive_modified_time, source_filename, mime_type,
-          chunk_index, chunk_count, page_number, content, content_hash, embedding)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          chunk_index, chunk_count, page_number, content, content_hash, embedding,
+          document_type, development_stage)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        on conflict (deal_id, drive_file_id, chunk_index)
        do update set
          drive_modified_time = excluded.drive_modified_time,
@@ -68,6 +72,8 @@ export async function writeDocumentChunks(params: {
          content = excluded.content,
          content_hash = excluded.content_hash,
          embedding = excluded.embedding,
+         document_type = excluded.document_type,
+         development_stage = excluded.development_stage,
          ingested_at = now()
        where documents.content_hash != excluded.content_hash`,
       [
@@ -82,6 +88,8 @@ export async function writeDocumentChunks(params: {
         chunk.content,
         chunk.contentHash,
         pgvector.toSql(embeddings[i]),
+        params.documentType ?? null,
+        params.developmentStage ?? null,
       ]
     );
   }
@@ -112,6 +120,8 @@ export async function processUploadedDocument(params: {
   pathname: string;
   filename: string;
   mimeType: string;
+  documentType?: string | null;
+  developmentStage?: string | null;
 }): Promise<ProcessUploadResult> {
   if (!SUPPORTED_MIME_TYPES.has(params.mimeType)) {
     throw new Error(`Unsupported file type (${params.mimeType}). Supported: PDF, Word (.docx), plain text.`);
@@ -135,6 +145,8 @@ export async function processUploadedDocument(params: {
     filename: params.filename,
     mimeType: params.mimeType,
     pages,
+    documentType: params.documentType,
+    developmentStage: params.developmentStage,
   });
 
   const existingKeys = await query<{ key: string }>(

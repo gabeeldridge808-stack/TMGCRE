@@ -12,6 +12,8 @@ interface Deal {
   asset_class: string;
   stage: string;
   owner_id: string;
+  deal_category: string;
+  development_stage: string | null;
   created_at: string;
   updated_at: string;
 }

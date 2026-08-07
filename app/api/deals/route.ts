@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, asset_class, stage, owner_id } = body;
+  const { name, asset_class, stage, owner_id, deal_category, development_stage } = body;
 
   // Same rule as the New Deal form's server action: only an admin can set
   // someone else as the owner — everyone else's deals default to themselves.
@@ -39,7 +39,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const deal = await createDeal({ name, asset_class, stage: stage || "sourcing", owner_id: effectiveOwnerId });
+    const deal = await createDeal({
+      name,
+      asset_class,
+      stage: stage || "sourcing",
+      owner_id: effectiveOwnerId,
+      deal_category: deal_category || "acquisition",
+      development_stage: deal_category === "development" ? development_stage ?? null : null,
+    });
     await recordAuditLog(currentUser, { dealId: deal.id, action: "deal.created" });
     return NextResponse.json(deal, { status: 201 });
   } catch (error) {

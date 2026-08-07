@@ -44,6 +44,35 @@ create index deals_asset_class_idx on deals (asset_class);
 create index deals_stage_idx on deals (stage);
 create index deals_owner_id_idx on deals (owner_id);
 
+-- Ground-up / major-redevelopment deals. deal_category is orthogonal to
+-- asset_class (an industrial deal can be an acquisition OR a development;
+-- condo today is always development, but the column still applies to it
+-- so cross-deal development queries don't special-case condo).
+alter table deals add column deal_category text not null default 'acquisition'
+  check (deal_category in ('acquisition', 'development'));
+
+-- Separate from `stage` (sourcing/underwriting/diligence/closing/closed/
+-- dead), which every deal keeps regardless of category and which drives
+-- the Kanban board + checklist_templates. development_stage is the
+-- ground-up-specific phase, additive rather than a replacement.
+alter table deals add column development_stage text
+  check (development_stage in (
+    'site_control_diligence', 'entitlement', 'design_permitting',
+    'construction', 'lease_up_sellout_stabilization'
+  ));
+
+-- A development deal must have a development_stage; an acquisition deal
+-- must not -- catches the two ways this pair of columns could silently
+-- drift out of sync (a dev deal with no stage, or a stage stuck on a
+-- deal that got reclassified back to acquisition).
+alter table deals add constraint development_stage_matches_category check (
+  (deal_category = 'development' and development_stage is not null) or
+  (deal_category = 'acquisition' and development_stage is null)
+);
+
+create index deals_deal_category_idx on deals (deal_category);
+create index deals_development_stage_idx on deals (development_stage);
+
 -- Audit trail: who changed what, when. Append-only — a row here is never
 -- updated or deleted, so it stays a reliable record even after the deal
 -- itself changes again or is deleted (deal_id references ... on delete set
@@ -103,6 +132,157 @@ create table deal_attributes (
 
 create index deal_attributes_deal_id_idx on deal_attributes (deal_id);
 
+-- Development module. Applies only to deals.deal_category = 'development'.
+--
+-- deal_development_details holds the deal's TRACKED, actual-vs-budget
+-- status as it executes -- distinct from any asset class's underwriting
+-- ASSUMPTIONS, which stay in deal_attributes as before (e.g. condo's
+-- hard_costs/contingency_pct/loan_to_cost_pct already there feed
+-- lib/condoUnderwritingModel.ts and are not duplicated here). The two
+-- will often start equal at underwriting and diverge as the deal
+-- proceeds -- that divergence is exactly what total_cost_actual is for.
+create table deal_development_details (
+  deal_id uuid primary key references deals(id) on delete cascade,
+
+  site_control_structure text check (site_control_structure in ('owned', 'option', 'jv', 'ground_lease')),
+  entitlement_jurisdiction text,
+  -- Free text, not an enum -- real entitlement processes vary too much
+  -- per jurisdiction to force into a fixed list. Dated approval steps
+  -- live in deal_milestones below.
+  entitlement_status text,
+
+  -- Capital stack summary
+  equity_amount numeric,
+  senior_debt_amount numeric,
+  mezz_pref_amount numeric,
+  jv_structure text,              -- free text: promote structures vary too much for a rigid schema
+
+  -- Key dates
+  acquisition_closing_date date,
+  permit_submittal_date date,
+  gc_mobilization_date date,
+  projected_delivery_date date,
+  projected_stabilization_date date,
+
+  -- Budget: a single running actual-vs-basis total, not a line-item ledger
+  land_basis numeric,
+  hard_costs_budget numeric,
+  soft_costs_budget numeric,
+  contingency_budget numeric,
+  total_cost_basis numeric,
+  total_cost_actual numeric,
+
+  -- Risk flags
+  entitlement_risk text check (entitlement_risk in ('low', 'medium', 'high')),
+  cost_overrun_risk text check (cost_overrun_risk in ('low', 'medium', 'high')),
+  market_risk text check (market_risk in ('low', 'medium', 'high')),
+
+  updated_at timestamptz not null default now()
+);
+
+-- Open-ended dated events for a development deal: entitlement approval
+-- steps (jurisdiction-specific, unpredictable in number -- a planning
+-- commission hearing, a coastal commission sign-off, a city council
+-- vote) AND budget/schedule-change flags surfaced from ingested documents
+-- (a cost report or revised GC schedule creates a row here rather than a
+-- boolean with nowhere to go -- see lib/documents.ts). One table, since
+-- both are "named event + date + status" shaped and both feed the
+-- cross-deal timeline view.
+create table deal_milestones (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid not null references deals(id) on delete cascade,
+  category text not null check (category in ('entitlement_approval', 'budget_change', 'schedule_change', 'other')),
+  label text not null,
+  milestone_date date,            -- when it actually happened
+  target_date date,               -- planned date, for ones still pending
+  status text not null default 'pending' check (status in ('pending', 'complete', 'delayed', 'at_risk')),
+  source_document text,           -- filename, same provenance idea as deal_attributes.source
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index deal_milestones_deal_id_idx on deal_milestones (deal_id);
+
+-- Per-asset-class development detail. One table per class rather than one
+-- wide table, since the fields genuinely don't overlap (dock doors vs.
+-- room count vs. HOA structure) -- this is the "fully relational" half of
+-- the module; land uses only the shared tables above (its existing
+-- deal_attributes land_scalars/land_planning sections already cover
+-- entitlement_status/planned_use/far/acreage, so a land_development_details
+-- table would just be empty).
+
+create table industrial_development_details (
+  deal_id uuid primary key references deals(id) on delete cascade,
+  building_sf numeric,
+  clear_height_ft numeric,
+  dock_doors int,
+  trailer_stalls int,
+  office_sf numeric,
+  truck_court_depth_ft numeric,
+  delivery_type text check (delivery_type in ('spec', 'build_to_suit')),
+  bts_tenant_name text,
+  bts_tenant_lease_status text,
+  bts_lease_term_months int,
+  target_tenant_profile text,
+  leasing_broker text,
+  ios_yard_acreage numeric,
+  ios_yard_stall_count int,
+  ios_yard_projected_income numeric
+);
+
+create table hospitality_development_details (
+  deal_id uuid primary key references deals(id) on delete cascade,
+  room_count int,
+  brand text,
+  is_independent boolean not null default false,
+  management_company text,
+  franchise_agreement_status text,
+  franchise_agreement_term_years int,
+  fb_amenity_program text,
+  projected_adr numeric,
+  projected_occupancy_pct numeric,
+  projected_revpar numeric,
+  pip_cost numeric,
+  is_conversion boolean not null default false
+);
+
+create table condo_development_details (
+  deal_id uuid primary key references deals(id) on delete cascade,
+  hoa_structure text,
+  deposit_escrow_terms text,
+  construction_lender_presale_threshold_pct numeric
+);
+
+-- Sales-pace TRACKING over time -- distinct from the static
+-- absorption_rate_units_per_month assumption already in deal_attributes
+-- (condoSales, lib/attributeSchemas.ts). One row per as-of snapshot.
+create table condo_unit_sales (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid not null references deals(id) on delete cascade,
+  as_of_date date not null,
+  units_released int not null,
+  units_under_contract int not null,
+  units_closed int not null,
+  created_at timestamptz not null default now()
+);
+
+create index condo_unit_sales_deal_id_idx on condo_unit_sales (deal_id);
+
+-- Reasoned by analogy from industrial's spec/BTS structure and a real pad
+-- site plan (a QSR + drive-thru coffee pad development), not from an
+-- explicit field list -- least-confirmed table in this module.
+create table retail_development_details (
+  deal_id uuid primary key references deals(id) on delete cascade,
+  building_sf numeric,
+  pad_count int,
+  tenant_name text,
+  tenant_status text check (tenant_status in ('vacant_spec', 'loi', 'lease_executed')),
+  lease_term_months int,
+  drive_thru boolean not null default false,
+  parking_stalls_required int,
+  parking_stalls_provided int
+);
+
 -- Document chunks for RAG. One row = one embeddable chunk of one source
 -- file. A single source file (e.g. a 40-page OM) produces many rows here,
 -- linked by (deal_id, drive_file_id) and ordered by chunk_index.
@@ -132,6 +312,20 @@ create table documents (
   content_hash text not null,   -- sha256 of `content`, cheap change-detection
   embedding vector(1024) not null,
 
+  -- Development-module tagging (null for an acquisition deal's documents).
+  -- document_type lets retrieval filter by deal + stage + document type, as
+  -- section 3 of the development module asks for; development_stage tags
+  -- which phase the document belongs to, independent of whatever stage the
+  -- deal is in by the time someone searches for it.
+  document_type text check (document_type in (
+    'entitlement', 'gc_contract', 'franchise_agreement', 'psa',
+    'cost_report', 'lease', 'financing_memo', 'other'
+  )),
+  development_stage text check (development_stage in (
+    'site_control_diligence', 'entitlement', 'design_permitting',
+    'construction', 'lease_up_sellout_stabilization'
+  )),
+
   ingested_at timestamptz not null default now(),
 
   unique (deal_id, drive_file_id, chunk_index)
@@ -139,6 +333,7 @@ create table documents (
 
 create index documents_deal_id_idx on documents (deal_id);
 create index documents_drive_file_id_idx on documents (deal_id, drive_file_id);
+create index documents_document_type_idx on documents (document_type);
 
 -- ivfflat is fine at low row counts (hundreds-to-low-thousands of chunks).
 -- Once a deal's corpus grows past that, or query latency becomes visible,

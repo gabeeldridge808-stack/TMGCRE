@@ -41,6 +41,8 @@ export async function editDealAction(
     asset_class: formData.get("asset_class")?.toString() ?? "",
     stage: formData.get("stage")?.toString() ?? "",
     owner_id: ownerId,
+    deal_category: formData.get("deal_category")?.toString() ?? "",
+    development_stage: formData.get("development_stage")?.toString() ?? "",
   });
 
   if (!payload.name || !payload.asset_class || !payload.owner_id) {

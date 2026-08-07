@@ -10,6 +10,7 @@ interface Deal {
   asset_class: string;
   stage: string;
   owner_name: string;
+  deal_category: string;
   created_at: string;
 }
 
@@ -25,26 +26,28 @@ export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("q") ?? "";
   const assetClass = req.nextUrl.searchParams.get("asset_class") ?? "";
   const stage = req.nextUrl.searchParams.get("stage") ?? "";
+  const dealCategory = req.nextUrl.searchParams.get("deal_category") ?? "";
 
   const isAdmin = currentUser.role === "admin";
   const deals = await query<Deal>(
     isAdmin
-      ? `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name, d.created_at
+      ? `select d.id, d.name, d.asset_class, d.stage, d.deal_category, u.name as owner_name, d.created_at
          from deals d join users u on u.id = d.owner_id
          order by d.created_at desc`
-      : `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name, d.created_at
+      : `select d.id, d.name, d.asset_class, d.stage, d.deal_category, u.name as owner_name, d.created_at
          from deals d join users u on u.id = d.owner_id
          where d.owner_id = $1
          order by d.created_at desc`,
     isAdmin ? [] : [currentUser.id]
   );
-  const filtered = filterDealsByFacets(filterDealsByQuery(deals, search), { assetClass, stage });
+  const filtered = filterDealsByFacets(filterDealsByQuery(deals, search), { assetClass, stage, dealCategory });
 
   const csv = toCsv(
     filtered.map((d) => ({
       name: d.name,
       asset_class: d.asset_class,
       stage: d.stage,
+      deal_category: d.deal_category,
       owner: d.owner_name,
       created_at: d.created_at,
     }))

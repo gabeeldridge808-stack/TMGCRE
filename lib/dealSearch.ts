@@ -4,6 +4,8 @@ export interface DealSearchItem {
   asset_class?: string;
   stage?: string;
   owner_name?: string;
+  deal_category?: string;
+  development_stage?: string | null;
 }
 
 export function filterDealsByQuery<T extends DealSearchItem>(
@@ -34,11 +36,13 @@ export function filterDealsByQuery<T extends DealSearchItem>(
 /** Exact-match filters, applied in addition to (not instead of) the free-text search. */
 export function filterDealsByFacets<T extends DealSearchItem>(
   deals: T[],
-  facets: { assetClass?: string; stage?: string }
+  facets: { assetClass?: string; stage?: string; dealCategory?: string; developmentStage?: string }
 ): T[] {
   return deals.filter((deal) => {
     if (facets.assetClass && deal.asset_class !== facets.assetClass) return false;
     if (facets.stage && deal.stage !== facets.stage) return false;
+    if (facets.dealCategory && deal.deal_category !== facets.dealCategory) return false;
+    if (facets.developmentStage && deal.development_stage !== facets.developmentStage) return false;
     return true;
   });
 }

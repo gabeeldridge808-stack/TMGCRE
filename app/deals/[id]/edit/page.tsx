@@ -12,12 +12,17 @@ interface Deal {
   asset_class: string;
   stage: string;
   owner_id: string;
+  deal_category: string;
+  development_stage: string | null;
 }
 
 export default async function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [deal] = await query<Deal>(`select id, name, asset_class, stage, owner_id from deals where id = $1`, [id]);
+  const [deal] = await query<Deal>(
+    `select id, name, asset_class, stage, owner_id, deal_category, development_stage from deals where id = $1`,
+    [id]
+  );
   if (!deal) {
     notFound();
   }

@@ -31,6 +31,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link href="/search" className="text-muted" style={{ fontSize: 13, textDecoration: "none" }}>
                   Search
                 </Link>
+                <Link href="/development" className="text-muted" style={{ fontSize: 13, textDecoration: "none" }}>
+                  Development
+                </Link>
                 {user.role === "admin" && (
                   <Link href="/admin/users" className="text-muted" style={{ fontSize: 13, textDecoration: "none" }}>
                     Users

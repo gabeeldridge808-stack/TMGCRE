@@ -25,11 +25,18 @@ export async function GET(
   const access = await requireDealAccess(id);
   if (!access.ok) return access.response;
 
-  const files = await query<{ source_filename: string; chunk_count: string; ingested_at: string }>(
-    `select source_filename, count(*) as chunk_count, max(ingested_at) as ingested_at
+  const files = await query<{
+    source_filename: string;
+    chunk_count: string;
+    ingested_at: string;
+    document_type: string | null;
+    development_stage: string | null;
+  }>(
+    `select source_filename, count(*) as chunk_count, max(ingested_at) as ingested_at,
+            document_type, development_stage
      from documents
      where deal_id = $1
-     group by source_filename
+     group by source_filename, document_type, development_stage
      order by max(ingested_at) desc`,
     [id]
   );
@@ -59,6 +66,8 @@ export async function POST(
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file is required" }, { status: 400 });
   }
+  const documentType = formData.get("document_type")?.toString() || null;
+  const developmentStage = formData.get("development_stage")?.toString() || null;
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -80,6 +89,8 @@ export async function POST(
       pathname: blob.pathname,
       filename: file.name,
       mimeType: file.type,
+      documentType,
+      developmentStage,
     });
 
     await recordAuditLog(access.user, {

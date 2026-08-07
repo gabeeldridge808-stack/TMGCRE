@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createDealAction, type CreateDealState } from "./actions";
-import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
+import { ASSET_CLASSES, STAGES, DEAL_CATEGORIES, DEVELOPMENT_STAGES, DEVELOPMENT_STAGE_LABELS, titleCase } from "@/lib/dealConstants";
 
 const initialState: CreateDealState = {};
 
@@ -31,6 +31,8 @@ export default function NewDealForm({
   const [assetClass, setAssetClass] = useState("");
   const [stage, setStage] = useState<string>("sourcing");
   const [ownerId, setOwnerId] = useState(currentUserId);
+  const [dealCategory, setDealCategory] = useState<string>("acquisition");
+  const [developmentStage, setDevelopmentStage] = useState<string>("");
 
   return (
     <form action={formAction} className="card" style={{ display: "grid", gap: 16 }}>
@@ -81,6 +83,44 @@ export default function NewDealForm({
           ))}
         </select>
       </label>
+      <label>
+        Deal Type
+        <select
+          className="field"
+          name="deal_category"
+          value={dealCategory}
+          onChange={(e) => setDealCategory(e.target.value)}
+          style={{ marginTop: 4 }}
+        >
+          {DEAL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {titleCase(c)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {dealCategory === "development" && (
+        <label>
+          Development Stage
+          <select
+            className="field"
+            name="development_stage"
+            required
+            value={developmentStage}
+            onChange={(e) => setDevelopmentStage(e.target.value)}
+            style={{ marginTop: 4 }}
+          >
+            <option value="" disabled>
+              Select development stage…
+            </option>
+            {DEVELOPMENT_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {DEVELOPMENT_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {isAdmin ? (
         <label>
           Owner

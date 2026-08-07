@@ -1,6 +1,6 @@
 import { queryOrThrow } from "@/lib/db";
 import { filterDealsByQuery, filterDealsByFacets, paginate } from "@/lib/dealSearch";
-import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
+import { ASSET_CLASSES, STAGES, DEAL_CATEGORIES, titleCase } from "@/lib/dealConstants";
 import { getCurrentUser } from "@/lib/session";
 import type { DateAttributeRow } from "@/lib/keyDates";
 import PortfolioTable from "./PortfolioTable";
@@ -14,10 +14,11 @@ interface Deal {
   asset_class: string;
   stage: string;
   owner_name: string;
+  deal_category: string;
 }
 
 interface PortfolioPageProps {
-  searchParams?: Promise<{ q?: string; asset_class?: string; stage?: string; page?: string }>;
+  searchParams?: Promise<{ q?: string; asset_class?: string; stage?: string; deal_category?: string; page?: string }>;
 }
 
 const PAGE_SIZE = 25;
@@ -27,6 +28,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
   const search = params?.q ?? "";
   const assetClassFilter = params?.asset_class ?? "";
   const stageFilter = params?.stage ?? "";
+  const dealCategoryFilter = params?.deal_category ?? "";
 
   const currentUser = await getCurrentUser();
   const isAdmin = currentUser?.role === "admin";
@@ -44,10 +46,10 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
 
     deals = await queryOrThrow<Deal>(
       isAdmin
-        ? `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name
+        ? `select d.id, d.name, d.asset_class, d.stage, d.deal_category, u.name as owner_name
            from deals d join users u on u.id = d.owner_id
            order by d.created_at desc`
-        : `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name
+        : `select d.id, d.name, d.asset_class, d.stage, d.deal_category, u.name as owner_name
            from deals d join users u on u.id = d.owner_id
            where d.owner_id = $1
            order by d.created_at desc`,
@@ -77,6 +79,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
   const filteredDeals = filterDealsByFacets(filterDealsByQuery(deals, search), {
     assetClass: assetClassFilter,
     stage: stageFilter,
+    dealCategory: dealCategoryFilter,
   });
   const pageNum = Number(params?.page) || 1;
   const { items: pagedDeals, page: currentPage, totalPages } = paginate(filteredDeals, pageNum, PAGE_SIZE);
@@ -87,7 +90,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
         <h1 style={{ margin: 0 }}>Portfolio</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <a
-            href={`/api/deals/export?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}`}
+            href={`/api/deals/export?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&deal_category=${encodeURIComponent(dealCategoryFilter)}`}
             className="btn btn-secondary btn-sm"
           >
             Export CSV
@@ -130,6 +133,14 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
                 </option>
               ))}
             </select>
+            <select className="field" name="deal_category" defaultValue={dealCategoryFilter} style={{ width: "auto" }}>
+              <option value="">All Deal Types</option>
+              {DEAL_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {titleCase(c)}
+                </option>
+              ))}
+            </select>
             <button type="submit" className="btn btn-secondary">
               Filter
             </button>
@@ -147,7 +158,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
                   </span>
                   <div style={{ display: "flex", gap: 8 }}>
                     <a
-                      href={`/?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&page=${currentPage - 1}`}
+                      href={`/?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&deal_category=${encodeURIComponent(dealCategoryFilter)}&page=${currentPage - 1}`}
                       className="btn btn-secondary btn-sm"
                       aria-disabled={currentPage <= 1}
                       style={currentPage <= 1 ? { pointerEvents: "none", opacity: 0.5 } : undefined}
@@ -155,7 +166,7 @@ export default async function PortfolioPage({ searchParams }: PortfolioPageProps
                       Previous
                     </a>
                     <a
-                      href={`/?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&page=${currentPage + 1}`}
+                      href={`/?q=${encodeURIComponent(search)}&asset_class=${encodeURIComponent(assetClassFilter)}&stage=${encodeURIComponent(stageFilter)}&deal_category=${encodeURIComponent(dealCategoryFilter)}&page=${currentPage + 1}`}
                       className="btn btn-secondary btn-sm"
                       aria-disabled={currentPage >= totalPages}
                       style={currentPage >= totalPages ? { pointerEvents: "none", opacity: 0.5 } : undefined}

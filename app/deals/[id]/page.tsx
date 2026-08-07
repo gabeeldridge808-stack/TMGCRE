@@ -19,6 +19,9 @@ import AuditLogSection from "./AuditLogSection";
 import IcMemoTool from "./IcMemoTool";
 import ChecklistSection from "./ChecklistSection";
 import DocumentList from "./DocumentList";
+import DevelopmentSection from "./DevelopmentSection";
+import { getDevelopmentDetails, getAssetClassDevelopmentDetails, getMilestones, getCondoUnitSales, assetClassHasDevelopmentDetailTable } from "@/lib/development";
+import type { AssetClass } from "@/lib/dealConstants";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +32,8 @@ interface Deal {
   stage: string;
   owner_id: string;
   owner_name: string;
+  deal_category: string;
+  development_stage: string | null;
 }
 
 interface DealAttribute {
@@ -41,6 +46,8 @@ interface DocumentFile {
   source_filename: string;
   chunk_count: string;
   drive_file_id: string;
+  document_type: string | null;
+  development_stage: string | null;
 }
 
 interface Comp {
@@ -120,7 +127,8 @@ export default async function DealWorkspacePage({
   );
 
   const files = await query<DocumentFile>(
-    `select source_filename, drive_file_id, count(*) as chunk_count
+    `select source_filename, drive_file_id, count(*) as chunk_count,
+            max(document_type) as document_type, max(development_stage) as development_stage
      from documents where deal_id = $1
      group by source_filename, drive_file_id
      order by max(ingested_at) desc`,
@@ -152,6 +160,15 @@ export default async function DealWorkspacePage({
   // (Zod + every asset class's schema) out of its bundle entirely.
   const fieldLabels = Object.fromEntries(Object.entries(FIELD_META).map(([key, meta]) => [key, meta.label]));
 
+  const isDevelopment = deal.deal_category === "development";
+  const developmentDetails = isDevelopment ? await getDevelopmentDetails(deal.id) : null;
+  const assetClassDevelopmentDetails =
+    isDevelopment && assetClassHasDevelopmentDetailTable(deal.asset_class as AssetClass)
+      ? await getAssetClassDevelopmentDetails(deal.id, deal.asset_class as "industrial" | "hospitality" | "condo" | "retail")
+      : null;
+  const milestones = isDevelopment ? await getMilestones(deal.id) : [];
+  const condoUnitSales = isDevelopment && deal.asset_class === "condo" ? await getCondoUnitSales(deal.id) : [];
+
   const overviewTab = (
     <div>
       <ChecklistSection dealId={deal.id} stage={deal.stage} items={checklistItems} />
@@ -167,14 +184,14 @@ export default async function DealWorkspacePage({
       <AttributesSection attributes={attributes} />
 
       <h2>Documents</h2>
-      <DealDocumentUpload dealId={deal.id} />
+      <DealDocumentUpload dealId={deal.id} isDevelopment={isDevelopment} />
 
       {files.length === 0 ? (
         <p className="text-muted" style={{ marginTop: 12 }}>
           No documents uploaded yet.
         </p>
       ) : (
-        <DocumentList dealId={deal.id} files={files} />
+        <DocumentList dealId={deal.id} files={files} isDevelopment={isDevelopment} />
       )}
 
       <p className="text-faint" style={{ marginTop: 12 }}>
@@ -207,6 +224,18 @@ export default async function DealWorkspacePage({
 
   const memoTab = <IcMemoTool dealId={deal.id} />;
 
+  const developmentTab = (
+    <DevelopmentSection
+      dealId={deal.id}
+      assetClass={deal.asset_class}
+      developmentStage={deal.development_stage}
+      initialDetails={developmentDetails as Record<string, unknown> | null}
+      initialAssetClassDetails={assetClassDevelopmentDetails as Record<string, unknown> | null}
+      initialMilestones={milestones}
+      initialUnitSales={condoUnitSales}
+    />
+  );
+
   return (
     <main className="page">
       <a href="/" className="back-link">
@@ -221,6 +250,7 @@ export default async function DealWorkspacePage({
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, marginBottom: 24 }}>
         <Badge variant="neutral">{titleCase(deal.asset_class)}</Badge>
         <Badge variant={STAGE_BADGE_VARIANT[deal.stage as Stage] ?? "neutral"}>{titleCase(deal.stage)}</Badge>
+        {isDevelopment && <Badge variant="info">Development</Badge>}
         <span className="text-muted" style={{ fontSize: 14 }}>
           owner: {deal.owner_name}
         </span>
@@ -229,6 +259,7 @@ export default async function DealWorkspacePage({
       <DealTabs
         tabs={[
           { label: "Overview", content: overviewTab },
+          ...(isDevelopment ? [{ label: "Development", content: developmentTab }] : []),
           { label: "Underwriting", content: underwritingTab },
           { label: "Comps", content: compsTab },
           { label: "IC Memo", content: memoTab },
