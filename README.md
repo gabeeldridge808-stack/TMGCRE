@@ -8,7 +8,7 @@ Internal deal-tracking platform for a real estate/PE team.
 hospitality, and land deals each have their own set of underwriting fields
 that don't overlap much (unit mix vs. RevPAR vs. entitlement status). Rather
 than a `deals` table with dozens of nullable columns, shared fields
-(name, asset_class, stage, owner) live on `deals`, and everything
+(name, asset_class, stage, owner_id) live on `deals`, and everything
 type-specific lives in `deal_attributes` as `(deal_id, key, value jsonb)`
 rows. Add a new asset class's fields without a migration.
 
@@ -263,3 +263,13 @@ same `DATABASE_URL` as production.
 - **Chat history has no per-user isolation.** It's one shared conversation
   per deal (`chat_messages`), consistent with how attributes/comps/the
   audit log already work in this app, not a private thread per person.
+- **Access control is application-level, not database-level.** Every
+  deal-scoped page and API route checks `deals.owner_id` against the
+  current user (or admin) in application code (`lib/dealAccess.ts`) before
+  touching anything. This is enforced consistently, but it is not Postgres
+  row-level security — the app connects with one shared DB role via a
+  connection pool (`lib/db.ts`), not a per-request DB session with its own
+  identity, so native RLS policies aren't wired up. A bug in an individual
+  route's access check would not be caught by a second, DB-enforced layer.
+  Single-org, role-based (`admin` / `analyst`) — not multi-tenant; there's
+  no `organizations` table.
