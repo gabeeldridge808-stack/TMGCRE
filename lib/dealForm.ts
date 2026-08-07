@@ -2,7 +2,7 @@ export interface DealDraft {
   name: string;
   asset_class: string;
   stage?: string;
-  owner: string;
+  owner_id: string;
 }
 
 export function buildDealPayload(input: DealDraft) {
@@ -10,6 +10,6 @@ export function buildDealPayload(input: DealDraft) {
     name: input.name.trim(),
     asset_class: input.asset_class.trim(),
     stage: input.stage?.trim() ? input.stage.trim() : "sourcing",
-    owner: input.owner.trim(),
+    owner_id: input.owner_id.trim(),
   };
 }

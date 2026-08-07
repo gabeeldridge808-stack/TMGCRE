@@ -7,6 +7,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { query, pgvector } from "@/lib/db";
 import { embedQuery } from "@/lib/embeddings";
 import { withAnthropicRetry } from "@/lib/anthropic";
+import { extractNumericTokens, fuseRetrievedChunks } from "@/lib/hybridRetrieval";
 
 const MODEL = "claude-opus-5";
 
@@ -45,7 +46,7 @@ export interface DealContext {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
   attributes: DealAttribute[];
 }
 
@@ -85,22 +86,57 @@ export const PROPOSE_ATTRIBUTE_UPDATE_TOOL = {
   },
 };
 
-/** Embed the question and pull the deal's most relevant indexed chunks. */
+/**
+ * Embed the question and pull the deal's most relevant indexed chunks.
+ * Hybrid: vector cosine similarity + Postgres full-text keyword ranking,
+ * fused via lib/hybridRetrieval.ts, plus an exact-substring lane for any
+ * specific figure (dollar amount, percentage, multiple, plain number) the
+ * question names. Pure embedding similarity can't reliably tell "cap rate
+ * 5.25%" from "cap rate 5.75%" apart — both are about cap rates and embed
+ * close together — so a question naming a specific figure gets that exact
+ * text matched directly rather than trusting semantic similarity alone.
+ */
 export async function retrieveContext(
   dealId: string,
   question: string,
   topK = 8
 ): Promise<RetrievedChunk[]> {
   const embedding = await embedQuery(question);
-  return query<RetrievedChunk>(
-    `select source_filename, page_number, content,
-            1 - (embedding <=> $1) as similarity
-     from documents
-     where deal_id = $2
-     order by embedding <=> $1
-     limit $3`,
-    [pgvector.toSql(embedding), dealId, topK]
-  );
+
+  const [vectorRanked, keywordRanked] = await Promise.all([
+    query<RetrievedChunk>(
+      `select source_filename, page_number, content,
+              1 - (embedding <=> $1) as similarity
+       from documents
+       where deal_id = $2
+       order by embedding <=> $1
+       limit $3`,
+      [pgvector.toSql(embedding), dealId, topK * 2]
+    ),
+    query<RetrievedChunk>(
+      `select source_filename, page_number, content,
+              ts_rank_cd(to_tsvector('english', content), plainto_tsquery('english', $2)) as similarity
+       from documents
+       where deal_id = $1 and to_tsvector('english', content) @@ plainto_tsquery('english', $2)
+       order by similarity desc
+       limit $3`,
+      [dealId, question, topK * 2]
+    ),
+  ]);
+
+  const numericTokens = extractNumericTokens(question);
+  const exactMatches =
+    numericTokens.length === 0
+      ? []
+      : await query<RetrievedChunk>(
+          `select source_filename, page_number, content, 1 as similarity
+           from documents
+           where deal_id = $1 and (${numericTokens.map((_, i) => `content ilike $${i + 2}`).join(" or ")})
+           limit ${topK}`,
+          [dealId, ...numericTokens.map((t) => `%${t}%`)]
+        );
+
+  return fuseRetrievedChunks(exactMatches, vectorRanked, keywordRanked, topK);
 }
 
 /** Pure formatting — deal attributes + retrieved chunks + question into one user turn. */
@@ -123,7 +159,7 @@ export function buildUserMessage(
     : "(no indexed documents matched this question — the deal room may not be ingested yet, or nothing relevant was found)";
 
   return `DEAL: ${deal.name}
-Asset class: ${deal.asset_class} | Stage: ${deal.stage} | Owner: ${deal.owner}
+Asset class: ${deal.asset_class} | Stage: ${deal.stage} | Owner: ${deal.owner_name}
 
 RECORDED ATTRIBUTES:
 ${attrLines}

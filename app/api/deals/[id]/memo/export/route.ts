@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { buildMemoDocx } from "@/lib/icMemoDocx";
 
 // Exports whatever memo text the client already has (already generated via
@@ -7,6 +8,10 @@ import { buildMemoDocx } from "@/lib/icMemoDocx";
 // doesn't regenerate it, so it's fast and doesn't call Claude again.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
+
   const body = await req.json();
   const memoText = typeof body.memoText === "string" ? body.memoText : "";
   if (!memoText.trim()) {

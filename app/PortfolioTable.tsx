@@ -11,7 +11,7 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
 }
 
 export default function PortfolioTable({ deals, isAdmin }: { deals: Deal[]; isAdmin: boolean }) {
@@ -139,7 +139,7 @@ export default function PortfolioTable({ deals, isAdmin }: { deals: Deal[]; isAd
               <td>
                 <Badge variant={STAGE_BADGE_VARIANT[deal.stage as Stage] ?? "neutral"}>{titleCase(deal.stage)}</Badge>
               </td>
-              <td className="text-muted">{deal.owner}</td>
+              <td className="text-muted">{deal.owner_name}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 <Link href={`/deals/${deal.id}/edit`} className="btn btn-secondary btn-sm" style={{ marginRight: 8 }}>
                   Edit

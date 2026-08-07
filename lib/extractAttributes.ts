@@ -136,21 +136,29 @@ export async function extractAttributesFromText(
   return attributes;
 }
 
-/** Insert-only — never overwrites an attribute that already has a value. */
+/**
+ * Inserts a new attribute, or refreshes one an earlier extraction wrote —
+ * but never touches one a human locked (a manual edit or an accepted chat
+ * proposal; see app/api/deals/[id]/route.ts and .../attributes/confirm).
+ * A corrected source document can now update a previously-extracted value;
+ * it still can't clobber a value a person actually entered or confirmed.
+ */
 export async function writeNewAttributes(
   dealId: string,
   attributes: ExtractedAttribute[]
-): Promise<{ key: string; inserted: boolean }[]> {
-  const results: { key: string; inserted: boolean }[] = [];
+): Promise<{ key: string; written: boolean }[]> {
+  const results: { key: string; written: boolean }[] = [];
   for (const attr of attributes) {
     const rows = await query<{ key: string }>(
-      `insert into deal_attributes (deal_id, key, value, source)
-       values ($1, $2, $3, $4)
-       on conflict (deal_id, key) do nothing
+      `insert into deal_attributes (deal_id, key, value, source, locked)
+       values ($1, $2, $3, $4, false)
+       on conflict (deal_id, key) do update
+         set value = excluded.value, source = excluded.source, updated_at = now()
+         where deal_attributes.locked = false
        returning key`,
       [dealId, attr.key, JSON.stringify(attr.value), attr.source_filename]
     );
-    results.push({ key: attr.key, inserted: rows.length > 0 });
+    results.push({ key: attr.key, written: rows.length > 0 });
   }
   return results;
 }

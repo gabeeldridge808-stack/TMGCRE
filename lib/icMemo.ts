@@ -35,7 +35,7 @@ export interface MemoDealContext {
   name: string;
   assetClass: string;
   stage: string;
-  owner: string;
+  ownerName: string;
   attributes: { key: string; value: unknown }[];
 }
 
@@ -97,7 +97,7 @@ export function buildMemoUserMessage(deal: MemoDealContext, underwritingSummary:
     : "(no comps imported for this deal)";
 
   return `DEAL: ${deal.name}
-Asset class: ${deal.assetClass} | Stage: ${deal.stage} | Owner: ${deal.owner}
+Asset class: ${deal.assetClass} | Stage: ${deal.stage} | Owner: ${deal.ownerName}
 
 RECORDED ATTRIBUTES:
 ${attrLines}

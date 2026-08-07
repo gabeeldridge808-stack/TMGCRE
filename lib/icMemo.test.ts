@@ -30,7 +30,7 @@ describe("buildMemoUserMessage", () => {
       name: "Harbor Point",
       assetClass: "multifamily",
       stage: "underwriting",
-      owner: "Jane",
+      ownerName: "Jane",
       attributes: [{ key: "unit_count", value: 120 }],
     };
 
@@ -43,7 +43,7 @@ describe("buildMemoUserMessage", () => {
   });
 
   it("formats comps when present", () => {
-    const deal: MemoDealContext = { name: "D", assetClass: "office", stage: "sourcing", owner: "X", attributes: [] };
+    const deal: MemoDealContext = { name: "D", assetClass: "office", stage: "sourcing", ownerName: "X", attributes: [] };
     const comps: MemoComp[] = [
       { property_name: "Oak Tower", sale_price: "1250000", price_per_sqft: "285", price_per_unit: null, cap_rate: "5.5" },
     ];
@@ -72,7 +72,7 @@ describe("buildMemoUserMessage", () => {
         salesCommissionPct: 5,
       })
     );
-    const deal: MemoDealContext = { name: "Marina Condos", assetClass: "condo", stage: "underwriting", owner: "Jane", attributes: [] };
+    const deal: MemoDealContext = { name: "Marina Condos", assetClass: "condo", stage: "underwriting", ownerName: "Jane", attributes: [] };
 
     const message = buildMemoUserMessage(deal, condoSummary, []);
 

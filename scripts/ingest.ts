@@ -150,14 +150,14 @@ async function ingestDeal(dealId: string, assetClass: string, driveFolderId: str
     if (found.length === 0) {
       console.log("  No new attributes found.");
     } else {
-      const written = await writeNewAttributes(dealId, found);
-      const inserted = written.filter((w) => w.inserted);
-      const alreadyRecorded = written.filter((w) => !w.inserted);
-      for (const w of inserted) console.log(`  + ${w.key}`);
-      if (alreadyRecorded.length > 0) {
-        console.log(`  (skipped, already recorded: ${alreadyRecorded.map((w) => w.key).join(", ")})`);
+      const results = await writeNewAttributes(dealId, found);
+      const written = results.filter((w) => w.written);
+      const skipped = results.filter((w) => !w.written);
+      for (const w of written) console.log(`  + ${w.key}`);
+      if (skipped.length > 0) {
+        console.log(`  (skipped, locked by a human edit: ${skipped.map((w) => w.key).join(", ")})`);
       }
-      console.log(`  ${inserted.length} attribute(s) added.`);
+      console.log(`  ${written.length} attribute(s) written.`);
     }
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOrThrow } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { recordAuditLog } from "@/lib/auditLog";
 
 interface Comp {
@@ -28,6 +28,10 @@ interface Comp {
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
+
   const comps = await query<Comp>(
     // to_char, not the raw `date` column — node-postgres returns `date`
     // columns as native JS Date objects (unlike `numeric`, which comes
@@ -60,10 +64,8 @@ const NUMERIC_FIELDS = [
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: dealId } = await params;
 
-  const [deal] = await query<{ id: string }>(`select id from deals where id = $1`, [dealId]);
-  if (!deal) {
-    return NextResponse.json({ error: "deal not found" }, { status: 404 });
-  }
+  const access = await requireDealAccess(dealId);
+  if (!access.ok) return access.response;
 
   const body = await req.json();
   const comps = body.comps;
@@ -124,8 +126,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const user = await getCurrentUser();
-  if (user) await recordAuditLog(user, { dealId, action: "comps.imported", details: { count: inserted } });
+  await recordAuditLog(access.user, { dealId, action: "comps.imported", details: { count: inserted } });
 
   return NextResponse.json({ inserted }, { status: 201 });
 }

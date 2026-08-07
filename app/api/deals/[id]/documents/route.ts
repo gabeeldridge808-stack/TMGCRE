@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { processUploadedDocument } from "@/lib/documents";
-import { getCurrentUser } from "@/lib/session";
 import { recordAuditLog } from "@/lib/auditLog";
 
 // Embedding + attribute-extraction (3 parallel Claude calls, one per
@@ -21,6 +21,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
+
   const files = await query<{ source_filename: string; chunk_count: string; ingested_at: string }>(
     `select source_filename, count(*) as chunk_count, max(ingested_at) as ingested_at
      from documents
@@ -41,6 +45,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: dealId } = await params;
+
+  const access = await requireDealAccess(dealId);
+  if (!access.ok) return access.response;
 
   const [deal] = await query<Deal>(`select asset_class from deals where id = $1`, [dealId]);
   if (!deal) {
@@ -75,14 +82,11 @@ export async function POST(
       mimeType: file.type,
     });
 
-    const user = await getCurrentUser();
-    if (user) {
-      await recordAuditLog(user, {
-        dealId,
-        action: "document.uploaded",
-        details: { filename: file.name, attributesAdded: result.attributesAdded },
-      });
-    }
+    await recordAuditLog(access.user, {
+      dealId,
+      action: "document.uploaded",
+      details: { filename: file.name, attributesAdded: result.attributesAdded },
+    });
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

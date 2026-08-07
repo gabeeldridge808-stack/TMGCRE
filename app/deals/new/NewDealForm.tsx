@@ -7,7 +7,16 @@ import { ASSET_CLASSES, STAGES, titleCase } from "@/lib/dealConstants";
 
 const initialState: CreateDealState = {};
 
-export default function NewDealForm() {
+export default function NewDealForm({
+  isAdmin,
+  users,
+  currentUserId,
+}: {
+  isAdmin: boolean;
+  /** Only populated for admins — used to reassign a new deal's owner instead of defaulting to self. */
+  users: { id: string; name: string }[];
+  currentUserId: string;
+}) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(createDealAction, initialState);
 
@@ -21,7 +30,7 @@ export default function NewDealForm() {
   const [name, setName] = useState("");
   const [assetClass, setAssetClass] = useState("");
   const [stage, setStage] = useState<string>("sourcing");
-  const [owner, setOwner] = useState("");
+  const [ownerId, setOwnerId] = useState(currentUserId);
 
   return (
     <form action={formAction} className="card" style={{ display: "grid", gap: 16 }}>
@@ -72,17 +81,29 @@ export default function NewDealForm() {
           ))}
         </select>
       </label>
-      <label>
-        Owner
-        <input
-          className="field"
-          name="owner"
-          required
-          value={owner}
-          onChange={(e) => setOwner(e.target.value)}
-          style={{ marginTop: 4 }}
-        />
-      </label>
+      {isAdmin ? (
+        <label>
+          Owner
+          <select
+            className="field"
+            name="owner_id"
+            required
+            value={ownerId}
+            onChange={(e) => setOwnerId(e.target.value)}
+            style={{ marginTop: 4 }}
+          >
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <p className="text-faint" style={{ margin: 0 }}>
+          This deal will be owned by you.
+        </p>
+      )}
 
       {state.error && <p className="text-danger" style={{ margin: 0, fontSize: 14 }}>{state.error}</p>}
 

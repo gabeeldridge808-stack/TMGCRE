@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 
 // Previews the extracted text already stored in `documents` (see
 // lib/documents.ts) rather than re-fetching the original file from Blob
@@ -7,6 +8,10 @@ import { query } from "@/lib/db";
 // searched anyway, so it's the more honest thing to show as a "preview."
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
+
   const fileId = req.nextUrl.searchParams.get("fileId");
   if (!fileId) {
     return NextResponse.json({ error: "fileId is required" }, { status: 400 });

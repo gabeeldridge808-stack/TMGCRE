@@ -18,7 +18,9 @@ test.describe("deal workspace", () => {
     await page.goto("/deals/new");
     await page.fill('input[name="name"]', DEAL_NAME);
     await page.selectOption('select[name="asset_class"]', "office");
-    await page.fill('input[name="owner"]', "e2e");
+    // No owner field to fill: an admin's owner picker already defaults to
+    // themselves, and a non-admin never sees an owner field at all — it's
+    // forced server-side regardless of what the form would submit.
     // Scoped to the form, not a bare `button[type="submit"]` -- the site
     // header's "Log out" button is *also* type="submit" and appears earlier
     // in the DOM, so an unscoped selector silently clicks that one instead
@@ -55,7 +57,7 @@ test.describe("deal workspace", () => {
 
   test("portfolio search and filters find a known deal", async ({ page }) => {
     await page.request.post("/api/deals", {
-      data: { name: DEAL_NAME, asset_class: "office", stage: "sourcing", owner: "e2e" },
+      data: { name: DEAL_NAME, asset_class: "office", stage: "sourcing" },
     });
 
     await page.goto("/?q=E2E+Test");

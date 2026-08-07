@@ -11,7 +11,7 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
 }
 
 export default function KanbanBoard({ deals: initialDeals }: { deals: Deal[] }) {
@@ -84,7 +84,7 @@ export default function KanbanBoard({ deals: initialDeals }: { deals: Deal[] }) 
                   </Link>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Badge variant="neutral">{titleCase(deal.asset_class)}</Badge>
-                    <span className="text-faint">{deal.owner}</span>
+                    <span className="text-faint">{deal.owner_name}</span>
                   </div>
                 </div>
               ))}

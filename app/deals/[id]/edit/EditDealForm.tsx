@@ -10,9 +10,14 @@ const initialState: EditDealState = {};
 export default function EditDealForm({
   dealId,
   initial,
+  isAdmin,
+  users,
 }: {
   dealId: string;
-  initial: { name: string; asset_class: string; stage: string; owner: string };
+  initial: { name: string; asset_class: string; stage: string; owner_id: string };
+  isAdmin: boolean;
+  /** Only populated for admins — used to reassign a deal's owner. */
+  users: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const boundAction = editDealAction.bind(null, dealId);
@@ -25,7 +30,7 @@ export default function EditDealForm({
   const [name, setName] = useState(initial.name);
   const [assetClass, setAssetClass] = useState(initial.asset_class);
   const [stage, setStage] = useState(initial.stage);
-  const [owner, setOwner] = useState(initial.owner);
+  const [ownerId, setOwnerId] = useState(initial.owner_id);
 
   return (
     <form action={formAction} className="card" style={{ display: "grid", gap: 16 }}>
@@ -73,17 +78,25 @@ export default function EditDealForm({
           ))}
         </select>
       </label>
-      <label>
-        Owner
-        <input
-          className="field"
-          name="owner"
-          required
-          value={owner}
-          onChange={(e) => setOwner(e.target.value)}
-          style={{ marginTop: 4 }}
-        />
-      </label>
+      {isAdmin && (
+        <label>
+          Owner
+          <select
+            className="field"
+            name="owner_id"
+            required
+            value={ownerId}
+            onChange={(e) => setOwnerId(e.target.value)}
+            style={{ marginTop: 4 }}
+          >
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {state.error && <p className="text-danger" style={{ margin: 0, fontSize: 14 }}>{state.error}</p>}
 

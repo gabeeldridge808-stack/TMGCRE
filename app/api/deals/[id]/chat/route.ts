@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { streamDealAgentAnswer, type ChatMessage, type DealAttribute, type DealContext } from "@/lib/agent";
 
 interface Deal {
@@ -7,7 +8,7 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
 }
 
 export async function POST(
@@ -15,6 +16,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -31,7 +35,9 @@ export async function POST(
   }
 
   const [deal] = await query<Deal>(
-    `select id, name, asset_class, stage, owner from deals where id = $1`,
+    `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name
+     from deals d join users u on u.id = d.owner_id
+     where d.id = $1`,
     [id]
   );
   if (!deal) {

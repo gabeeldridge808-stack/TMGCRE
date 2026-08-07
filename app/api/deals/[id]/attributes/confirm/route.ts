@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { recordAuditLog } from "@/lib/auditLog";
 
 // Writes a single attribute the chat agent proposed and a user explicitly
@@ -11,10 +11,10 @@ import { recordAuditLog } from "@/lib/auditLog";
 // output without a human clicking to confirm it here.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
+  const currentUser = access.user;
 
   const body = await req.json();
   const key = typeof body.key === "string" ? body.key.trim() : "";
@@ -23,15 +23,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "key and value are required" }, { status: 400 });
   }
 
-  const [deal] = await query<{ id: string }>(`select id from deals where id = $1`, [id]);
-  if (!deal) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-
   await query(
-    `insert into deal_attributes (deal_id, key, value, source)
-     values ($1, $2, $3, 'chat agent')
-     on conflict (deal_id, key) do update set value = excluded.value, source = 'chat agent', updated_at = now()`,
+    `insert into deal_attributes (deal_id, key, value, source, locked)
+     values ($1, $2, $3, 'chat agent', true)
+     on conflict (deal_id, key) do update set value = excluded.value, source = 'chat agent', locked = true, updated_at = now()`,
     [id, key, JSON.stringify(body.value)]
   );
 

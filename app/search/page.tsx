@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { searchPortfolio } from "@/lib/portfolioSearch";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,13 @@ export default async function SearchPage({
 }) {
   const params = await searchParams;
   const q = params?.q?.trim() ?? "";
+  const currentUser = await getCurrentUser();
 
   let results: Awaited<ReturnType<typeof searchPortfolio>> = [];
   let error: string | null = null;
-  if (q) {
+  if (q && currentUser) {
     try {
-      results = await searchPortfolio(q);
+      results = await searchPortfolio(q, currentUser.role === "admin" ? null : currentUser.id);
     } catch {
       error = "Search is unavailable right now — check that embeddings are configured.";
     }

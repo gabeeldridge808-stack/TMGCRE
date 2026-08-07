@@ -4,8 +4,8 @@ import { filterDealsByQuery } from "@/lib/dealSearch";
 describe("filterDealsByQuery", () => {
   it("matches across multiple fields and ignores empty searches", () => {
     const deals = [
-      { id: "1", name: "Harbor Point", asset_class: "Multifamily", stage: "Underwriting", owner: "Mina" },
-      { id: "2", name: "Oak Tower", asset_class: "Hospitality", stage: "Sourcing", owner: "Jules" },
+      { id: "1", name: "Harbor Point", asset_class: "Multifamily", stage: "Underwriting", owner_name: "Mina" },
+      { id: "2", name: "Oak Tower", asset_class: "Hospitality", stage: "Sourcing", owner_name: "Jules" },
     ];
 
     expect(filterDealsByQuery(deals, "harbor")).toEqual([deals[0]]);

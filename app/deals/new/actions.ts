@@ -14,14 +14,25 @@ export async function createDealAction(
   _prevState: CreateDealState,
   formData: FormData
 ): Promise<CreateDealState> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "You must be signed in to create a deal." };
+  }
+
+  // A non-admin can't set owner_id to anyone but themselves — this is
+  // enforced here server-side, not just by hiding the picker in the form,
+  // since the whole point of access control is not trusting client input.
+  const submittedOwnerId = formData.get("owner_id")?.toString() ?? "";
+  const ownerId = user.role === "admin" && submittedOwnerId ? submittedOwnerId : user.id;
+
   const payload = buildDealPayload({
     name: formData.get("name")?.toString() ?? "",
     asset_class: formData.get("asset_class")?.toString() ?? "",
     stage: formData.get("stage")?.toString() ?? "",
-    owner: formData.get("owner")?.toString() ?? "",
+    owner_id: ownerId,
   });
 
-  if (!payload.name || !payload.asset_class || !payload.owner) {
+  if (!payload.name || !payload.asset_class || !payload.owner_id) {
     return { error: "Name, asset class, and owner are required." };
   }
 
@@ -33,8 +44,7 @@ export async function createDealAction(
     return { error: describeDealWriteError(error).message };
   }
 
-  const user = await getCurrentUser();
-  if (user) await recordAuditLog(user, { dealId, action: "deal.created" });
+  await recordAuditLog(user, { dealId, action: "deal.created" });
 
   // Return the new id and let the client navigate (router.push), rather
   // than calling redirect() here. redirect() to a middleware-protected

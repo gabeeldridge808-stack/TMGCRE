@@ -151,6 +151,6 @@ export async function processUploadedDocument(params: {
   return {
     filename: params.filename,
     chunkCount,
-    attributesAdded: written.filter((w) => w.inserted).map((w) => w.key),
+    attributesAdded: written.filter((w) => w.written).map((w) => w.key),
   };
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOrThrow } from "@/lib/db";
 import { describeDealWriteError } from "@/lib/deals";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { getCurrentUser } from "@/lib/session";
 import { recordAuditLog } from "@/lib/auditLog";
 import { ensureChecklistForStage } from "@/lib/checklist";
@@ -10,7 +11,7 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +26,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
 
   const [deal] = await query<Deal>(`select * from deals where id = $1`, [id]);
   if (!deal) {
@@ -44,8 +48,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
+
   const body = await req.json();
-  const { name, asset_class, stage, owner, attributes } = body;
+  const { name, asset_class, stage, owner_id, attributes } = body;
+
+  // Only an admin can reassign ownership through this route — anyone else's
+  // owner_id is silently ignored rather than trusted from the request body.
+  const effectiveOwnerId = access.user.role === "admin" ? owner_id : undefined;
 
   let deal: Deal | undefined;
   try {
@@ -57,11 +69,11 @@ export async function PATCH(
          name = coalesce($2, name),
          asset_class = coalesce($3, asset_class),
          stage = coalesce($4, stage),
-         owner = coalesce($5, owner),
+         owner_id = coalesce($5, owner_id),
          updated_at = now()
        where id = $1
        returning *`,
-      [id, name, asset_class, stage, owner]
+      [id, name, asset_class, stage, effectiveOwnerId]
     );
   } catch (error) {
     const { status, message } = describeDealWriteError(error);
@@ -72,17 +84,16 @@ export async function PATCH(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const currentUser = await getCurrentUser();
-  if (currentUser) await recordAuditLog(currentUser, { dealId: id, action: "deal.updated" });
+  await recordAuditLog(access.user, { dealId: id, action: "deal.updated" });
 
   await ensureChecklistForStage(deal.id, deal.stage);
 
   if (attributes && typeof attributes === "object") {
     for (const [key, value] of Object.entries(attributes)) {
       await query(
-        `insert into deal_attributes (deal_id, key, value, source)
-         values ($1, $2, $3, 'manual')
-         on conflict (deal_id, key) do update set value = excluded.value, source = 'manual', updated_at = now()`,
+        `insert into deal_attributes (deal_id, key, value, source, locked)
+         values ($1, $2, $3, 'manual', true)
+         on conflict (deal_id, key) do update set value = excluded.value, source = 'manual', locked = true, updated_at = now()`,
         [id, key, JSON.stringify(value)]
       );
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { streamIcMemo, formatIncomeUnderwritingSummary, formatCondoUnderwritingSummary, type MemoComp } from "@/lib/icMemo";
 import { DEFAULT_UNDERWRITING_INPUTS, deriveInputsFromAttributes, runUnderwritingModel } from "@/lib/underwritingModel";
 import {
@@ -17,11 +18,14 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
 }
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -30,7 +34,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  const [deal] = await query<Deal>(`select id, name, asset_class, stage, owner from deals where id = $1`, [id]);
+  const [deal] = await query<Deal>(
+    `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name
+     from deals d join users u on u.id = d.owner_id
+     where d.id = $1`,
+    [id]
+  );
   if (!deal) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
@@ -62,7 +71,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         );
 
   const stream = await streamIcMemo(
-    { name: deal.name, assetClass: deal.asset_class, stage: deal.stage, owner: deal.owner, attributes },
+    { name: deal.name, assetClass: deal.asset_class, stage: deal.stage, ownerName: deal.owner_name, attributes },
     underwritingSummary,
     comps
   );

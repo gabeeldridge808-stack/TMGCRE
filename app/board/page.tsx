@@ -1,4 +1,5 @@
-import { query } from "@/lib/db";
+import { queryOrThrow } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 import KanbanBoard from "./KanbanBoard";
 
 export const dynamic = "force-dynamic";
@@ -8,11 +9,34 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
 }
 
 export default async function BoardPage() {
-  const deals = await query<Deal>(`select id, name, asset_class, stage, owner from deals order by created_at desc`);
+  const currentUser = await getCurrentUser();
+  const isAdmin = currentUser?.role === "admin";
+
+  let deals: Deal[] = [];
+  let loadError: string | null = null;
+  try {
+    if (!currentUser) throw new Error("not signed in");
+    deals = await queryOrThrow<Deal>(
+      isAdmin
+        ? `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name
+           from deals d join users u on u.id = d.owner_id
+           order by d.created_at desc`
+        : `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name
+           from deals d join users u on u.id = d.owner_id
+           where d.owner_id = $1
+           order by d.created_at desc`,
+      isAdmin ? [] : [currentUser.id]
+    );
+  } catch (error) {
+    loadError =
+      error instanceof Error && error.message === "not signed in"
+        ? "You must be signed in to view the pipeline."
+        : "Couldn't load the pipeline — the database is unreachable. This does not mean your deals are gone; check DATABASE_URL and try again.";
+  }
 
   return (
     <main className="page" style={{ maxWidth: "none" }}>
@@ -22,7 +46,7 @@ export default async function BoardPage() {
           List view
         </a>
       </div>
-      <KanbanBoard deals={deals} />
+      {loadError ? <p className="text-danger">{loadError}</p> : <KanbanBoard deals={deals} />}
     </main>
   );
 }

@@ -28,7 +28,10 @@ create table deals (
   name text not null,
   asset_class text not null check (asset_class in ('multifamily', 'hospitality', 'land', 'office', 'retail', 'industrial', 'condo')),
   stage text not null default 'sourcing' check (stage in ('sourcing', 'underwriting', 'diligence', 'closing', 'closed', 'dead')),
-  owner text not null,
+  -- A real FK, not a free-text name — lets access control (lib/dealAccess.ts)
+  -- check "is this user this deal's owner" without string matching, and
+  -- means a deal never points at someone who doesn't have an account.
+  owner_id uuid not null references users(id),
   -- Set by scripts/ingest.ts the first time a Drive folder is linked
   -- (via --deal-id + --drive-folder-id), so a later `--all` run knows
   -- which deals to re-sync without having to pass every folder id again.
@@ -39,6 +42,7 @@ create table deals (
 
 create index deals_asset_class_idx on deals (asset_class);
 create index deals_stage_idx on deals (stage);
+create index deals_owner_id_idx on deals (owner_id);
 
 -- Audit trail: who changed what, when. Append-only — a row here is never
 -- updated or deleted, so it stays a reliable record even after the deal
@@ -86,6 +90,13 @@ create table deal_attributes (
   -- written before this column existed. Purely provenance, never used to
   -- gate behavior.
   source text,
+  -- True for anything a human entered or confirmed (manual edit, chat-
+  -- agent proposal accepted) -- see lib/extractAttributes.ts's
+  -- writeNewAttributes. A later document extraction finding the same key
+  -- again may refresh an unlocked (extracted) value but must never
+  -- silently overwrite a locked one; the human-facing edit/confirm paths
+  -- can still always overwrite, locked or not.
+  locked boolean not null default false,
   updated_at timestamptz not null default now(),
   unique (deal_id, key)
 );

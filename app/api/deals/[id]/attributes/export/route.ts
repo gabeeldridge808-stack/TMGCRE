@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 import { toCsv } from "@/lib/csvExport";
 import { FIELD_META } from "@/lib/attributeSchemas";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const access = await requireDealAccess(id);
+  if (!access.ok) return access.response;
 
   const [deal] = await query<{ name: string }>(`select name from deals where id = $1`, [id]);
   if (!deal) {

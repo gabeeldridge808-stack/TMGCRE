@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
-import { query } from "@/lib/db";
+import { query, queryOrThrow } from "@/lib/db";
 import { titleCase, STAGE_BADGE_VARIANT, type Stage } from "@/lib/dealConstants";
 import { ensureChecklistForStage } from "@/lib/checklist";
 import { FIELD_META } from "@/lib/attributeSchemas";
+import { getCurrentUser } from "@/lib/session";
+import { canAccessDeal } from "@/lib/dealAccess";
 import Badge from "@/app/Badge";
 import DealChat from "./DealChat";
 import DealDocumentUpload from "./DealDocumentUpload";
@@ -25,7 +27,8 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_id: string;
+  owner_name: string;
 }
 
 interface DealAttribute {
@@ -62,9 +65,43 @@ export default async function DealWorkspacePage({
 }) {
   const { id } = await params;
 
-  const [deal] = await query<Deal>(`select * from deals where id = $1`, [id]);
+  // queryOrThrow, not query — a DB outage here previously fell through to
+  // notFound(), rendering as an ordinary 404 indistinguishable from the
+  // deal having been deleted. On a financial tracking tool that's exactly
+  // the silent failure this page shouldn't have.
+  let deal: Deal | null = null;
+  let loadError = false;
+  try {
+    const [row] = await queryOrThrow<Deal>(
+      `select d.*, u.name as owner_name from deals d join users u on u.id = d.owner_id where d.id = $1`,
+      [id]
+    );
+    deal = row ?? null;
+  } catch {
+    loadError = true;
+  }
+
+  if (loadError) {
+    return (
+      <main className="page">
+        <p className="text-danger">
+          Couldn&apos;t load this deal — the database is unreachable. This does not mean the deal is gone; check
+          DATABASE_URL and try again.
+        </p>
+      </main>
+    );
+  }
   if (!deal) {
     notFound();
+  }
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !canAccessDeal(currentUser, deal.owner_id)) {
+    return (
+      <main className="page">
+        <p className="text-danger">You don&apos;t have access to this deal.</p>
+      </main>
+    );
   }
 
   // Defensive, not just belt-and-suspenders: this covers deals created
@@ -185,7 +222,7 @@ export default async function DealWorkspacePage({
         <Badge variant="neutral">{titleCase(deal.asset_class)}</Badge>
         <Badge variant={STAGE_BADGE_VARIANT[deal.stage as Stage] ?? "neutral"}>{titleCase(deal.stage)}</Badge>
         <span className="text-muted" style={{ fontSize: 14 }}>
-          owner: {deal.owner}
+          owner: {deal.owner_name}
         </span>
       </div>
 

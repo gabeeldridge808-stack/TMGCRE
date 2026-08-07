@@ -7,7 +7,7 @@ describe("buildUserMessage", () => {
     name: "Harbor Point",
     asset_class: "multifamily",
     stage: "underwriting",
-    owner: "Mina",
+    owner_name: "Mina",
     attributes: [{ key: "unit_count", value: 212 }],
   };
 

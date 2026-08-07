@@ -11,7 +11,7 @@ export interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -20,16 +20,16 @@ export interface CreateDealInput {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_id: string;
 }
 
 /** Throws on any failure — callers use describeDealWriteError to turn that into a message. */
 export async function createDeal(input: CreateDealInput): Promise<Deal> {
   const [deal] = await queryOrThrow<Deal>(
-    `insert into deals (name, asset_class, stage, owner)
+    `insert into deals (name, asset_class, stage, owner_id)
      values ($1, $2, $3, $4)
      returning *`,
-    [input.name, input.asset_class, input.stage, input.owner]
+    [input.name, input.asset_class, input.stage, input.owner_id]
   );
   await ensureChecklistForStage(deal.id, deal.stage);
   return deal;
@@ -38,10 +38,10 @@ export async function createDeal(input: CreateDealInput): Promise<Deal> {
 /** Throws on any failure (including "not found", surfaced as a plain Error) — callers use describeDealWriteError. */
 export async function updateDeal(id: string, input: CreateDealInput): Promise<Deal> {
   const [deal] = await queryOrThrow<Deal>(
-    `update deals set name = $2, asset_class = $3, stage = $4, owner = $5, updated_at = now()
+    `update deals set name = $2, asset_class = $3, stage = $4, owner_id = $5, updated_at = now()
      where id = $1
      returning *`,
-    [id, input.name, input.asset_class, input.stage, input.owner]
+    [id, input.name, input.asset_class, input.stage, input.owner_id]
   );
   if (!deal) {
     throw new Error("not found");
@@ -55,8 +55,9 @@ export interface DealWriteError {
   message: string;
 }
 
-// Postgres check-constraint violation. See https://www.postgresql.org/docs/current/errcodes-appendix.html
+// Postgres error codes. See https://www.postgresql.org/docs/current/errcodes-appendix.html
 const CHECK_VIOLATION = "23514";
+const FOREIGN_KEY_VIOLATION = "23503";
 
 /** Pure: turns a createDeal()/updateDeal() failure into a status + message a caller can show directly. */
 export function describeDealWriteError(error: unknown): DealWriteError {
@@ -70,6 +71,10 @@ export function describeDealWriteError(error: unknown): DealWriteError {
       status: 400,
       message: `Invalid asset class or stage. asset_class must be one of: ${ASSET_CLASSES.join(", ")}. stage must be one of: ${STAGES.join(", ")}.`,
     };
+  }
+
+  if (code === FOREIGN_KEY_VIOLATION) {
+    return { status: 400, message: "Owner must be an existing user." };
   }
 
   return {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 import { filterDealsByQuery, filterDealsByFacets } from "@/lib/dealSearch";
 import { toCsv } from "@/lib/csvExport";
 
@@ -8,7 +9,7 @@ interface Deal {
   name: string;
   asset_class: string;
   stage: string;
-  owner: string;
+  owner_name: string;
   created_at: string;
 }
 
@@ -16,11 +17,27 @@ interface Deal {
 // the whole table unconditionally — reuses the same pure filter functions
 // the page itself uses, so "export" always matches "what I'm looking at."
 export async function GET(req: NextRequest) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const search = req.nextUrl.searchParams.get("q") ?? "";
   const assetClass = req.nextUrl.searchParams.get("asset_class") ?? "";
   const stage = req.nextUrl.searchParams.get("stage") ?? "";
 
-  const deals = await query<Deal>(`select id, name, asset_class, stage, owner, created_at from deals order by created_at desc`);
+  const isAdmin = currentUser.role === "admin";
+  const deals = await query<Deal>(
+    isAdmin
+      ? `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name, d.created_at
+         from deals d join users u on u.id = d.owner_id
+         order by d.created_at desc`
+      : `select d.id, d.name, d.asset_class, d.stage, u.name as owner_name, d.created_at
+         from deals d join users u on u.id = d.owner_id
+         where d.owner_id = $1
+         order by d.created_at desc`,
+    isAdmin ? [] : [currentUser.id]
+  );
   const filtered = filterDealsByFacets(filterDealsByQuery(deals, search), { assetClass, stage });
 
   const csv = toCsv(
@@ -28,7 +45,7 @@ export async function GET(req: NextRequest) {
       name: d.name,
       asset_class: d.asset_class,
       stage: d.stage,
-      owner: d.owner,
+      owner: d.owner_name,
       created_at: d.created_at,
     }))
   );

@@ -3,7 +3,7 @@ export interface DealSearchItem {
   name?: string;
   asset_class?: string;
   stage?: string;
-  owner?: string;
+  owner_name?: string;
 }
 
 export function filterDealsByQuery<T extends DealSearchItem>(
@@ -21,7 +21,7 @@ export function filterDealsByQuery<T extends DealSearchItem>(
       deal.name,
       deal.asset_class,
       deal.stage,
-      deal.owner,
+      deal.owner_name,
     ]
       .filter(Boolean)
       .join(" ")

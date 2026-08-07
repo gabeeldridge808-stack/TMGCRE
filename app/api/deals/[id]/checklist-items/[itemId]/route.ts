@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireDealAccess } from "@/lib/dealAccess";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   const { id: dealId, itemId } = await params;
+
+  const access = await requireDealAccess(dealId);
+  if (!access.ok) return access.response;
+
   const body = await req.json();
   const done = Boolean(body.done);
 
