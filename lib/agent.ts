@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { query, pgvector } from "@/lib/db";
 import { embedQuery } from "@/lib/embeddings";
+import { withAnthropicRetry } from "@/lib/anthropic";
 
 const MODEL = "claude-opus-5";
 
@@ -111,15 +112,17 @@ export async function streamDealAgentAnswer(
   const userContent = buildUserMessage(deal, chunks, question);
 
   const client = new Anthropic();
-  return client.messages.stream({
-    model: MODEL,
-    max_tokens: 4096,
-    system: [
-      { type: "text", text: CRE_ANALYST_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-    ],
-    thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
-    messages: [...history, { role: "user", content: userContent }],
+  return withAnthropicRetry(async () => {
+    return client.messages.stream({
+      model: MODEL,
+      max_tokens: 4096,
+      system: [
+        { type: "text", text: CRE_ANALYST_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
+      messages: [...history, { role: "user", content: userContent }],
+    });
   });
 }

@@ -157,6 +157,35 @@ export const FIELD_META: Record<string, FieldMeta> = {
   highest_best_use: { label: "Highest & Best Use", group: "Land" },
   planned_units_or_sqft: { label: "Planned Units / SF", group: "Land" },
   planned_use: { label: "Planned Use", group: "Land" },
+
+  // --- Condo Development --- (zoning/entitlement_status/far/acreage above
+  // are reused as-is — same real-world concept for a condo site as for
+  // raw land — everything else here is specific to a for-sale build.)
+  total_units: { label: "Total Units", group: "Condo Development", unit: "units" },
+  total_saleable_sqft: { label: "Total Saleable SF", group: "Condo Development", unit: "sqft" },
+  avg_unit_sqft: { label: "Avg Unit SF", group: "Condo Development", unit: "sqft" },
+  parking_spaces: { label: "Parking Spaces", group: "Condo Development" },
+  construction_duration_months: { label: "Construction Duration", group: "Condo Development" },
+  sales_period_months: { label: "Sales Period", group: "Condo Development" },
+  hard_costs: { label: "Hard Costs", group: "Condo Development", unit: "$" },
+  hard_cost_per_sqft: { label: "Hard Cost per SF", group: "Condo Development", unit: "$" },
+  soft_costs: { label: "Soft Costs", group: "Condo Development", unit: "$" },
+  contingency_pct: { label: "Contingency", group: "Condo Development", unit: "%" },
+  developer_fee_pct: { label: "Developer Fee", group: "Condo Development", unit: "%" },
+  total_development_cost: { label: "Total Development Cost", group: "Condo Development", unit: "$" },
+  construction_loan_amount: { label: "Construction Loan Amount", group: "Condo Development", unit: "$" },
+  loan_to_cost_pct: { label: "Loan-to-Cost", group: "Condo Development", unit: "%" },
+  construction_interest_rate: { label: "Construction Interest Rate", group: "Condo Development", unit: "%" },
+  construction_loan_term_months: { label: "Construction Loan Term", group: "Condo Development" },
+  equity_required: { label: "Equity Required", group: "Condo Development", unit: "$" },
+  avg_price_per_unit: { label: "Avg Price per Unit", group: "Condo Development", unit: "$" },
+  avg_price_per_sqft: { label: "Avg Price per SF", group: "Condo Development", unit: "$" },
+  sales_commission_pct: { label: "Sales Commission", group: "Condo Development", unit: "%" },
+  absorption_rate_units_per_month: { label: "Absorption Rate", group: "Condo Development", unit: "units" },
+  pre_sale_pct: { label: "Pre-Sold", group: "Condo Development", unit: "%" },
+  gross_sellout: { label: "Gross Sellout", group: "Condo Development", unit: "$" },
+  deposit_structure: { label: "Deposit Structure", group: "Condo Development" },
+  condo_unit_mix: { label: "Unit Mix", group: "Condo Development" },
 };
 
 // --- Shared deal-economics fields, split into two sections to stay under
@@ -331,6 +360,73 @@ const landPlanning = z.object({
   planned_use: z.enum(["multifamily", "office", "retail", "industrial", "mixed_use"]).optional(),
 }).partial();
 
+// --- Condo Development ---
+// A for-sale build is underwritten completely differently from every
+// income-producing class above: no NOI, no cap rate, no hold period. It's
+// a development pro forma (land + hard/soft costs financed by a
+// construction loan) resolved by selling units, not a cash-flowing asset
+// held for income — see lib/condoUnderwritingModel.ts for the actual math.
+// These sections deliberately do NOT reuse acquisitionAndReturns/
+// financingTerms/operatingFinancials above; those model a permanent loan
+// against in-place income, which doesn't exist here.
+
+const condoSiteAcquisition = z.object({
+  purchase_price: z.number().describe("Land acquisition price in USD"),
+  closing_date: z.string(),
+  earnest_money_deposit: z.number().optional(),
+  zoning: z.string().optional(),
+  entitlement_status: z.enum(["raw", "entitled", "permitted", "under_construction"]).optional(),
+  far: z.number().optional().describe("Floor area ratio"),
+  acreage: z.number().optional(),
+}).partial();
+
+const condoProgram = z.object({
+  total_units: z.number(),
+  total_saleable_sqft: z.number(),
+  avg_unit_sqft: z.number().optional(),
+  parking_spaces: z.number().optional(),
+  construction_duration_months: z.number().describe("Months from groundbreaking to completion/certificate of occupancy"),
+  sales_period_months: z.number().describe("Months from sales launch to projected sellout"),
+}).partial();
+
+const condoCosts = z.object({
+  hard_costs: z.number().describe("Total direct construction cost in USD"),
+  hard_cost_per_sqft: z.number().optional(),
+  soft_costs: z.number().describe("Architecture, engineering, permits, legal, and other non-construction costs in USD"),
+  contingency_pct: z.number().describe("Contingency as a percent of hard + soft costs, e.g. 5 for 5%"),
+  developer_fee_pct: z.number().optional().describe("Developer fee as a percent of total development cost"),
+  total_development_cost: z.number().describe("Land + hard costs + soft costs + contingency + developer fee, in USD"),
+}).partial();
+
+const condoFinancing = z.object({
+  construction_loan_amount: z.number(),
+  loan_to_cost_pct: z.number().describe("Construction loan as a percent of total development cost, e.g. 65 for 65%"),
+  construction_interest_rate: z.number().describe("e.g. 8.5 for 8.5%"),
+  construction_loan_term_months: z.number(),
+  equity_required: z.number().describe("Total equity required (total development cost minus construction loan), in USD"),
+}).partial();
+
+const condoSales = z.object({
+  avg_price_per_unit: z.number(),
+  avg_price_per_sqft: z.number().optional(),
+  sales_commission_pct: z.number().describe("Broker/sales commission as a percent of gross sellout, e.g. 5 for 5%"),
+  absorption_rate_units_per_month: z.number().optional().describe("Projected sales pace"),
+  pre_sale_pct: z.number().optional().describe("Percent of units pre-sold, often required by the construction lender before closing"),
+  gross_sellout: z.number().describe("Total projected revenue across all units, in USD"),
+  deposit_structure: z.string().optional().describe('e.g. "10% at contract, 10% at groundbreaking, 80% at closing"'),
+}).partial();
+
+const condoUnitMixRow = z.object({
+  unit_type: z.string().describe("e.g. Studio, 1BR/1BA, 2BR/2BA, Penthouse"),
+  count: z.number(),
+  avg_sqft: z.number().optional(),
+  avg_sale_price: z.number().optional(),
+});
+
+const condoUnitMix = z.object({
+  condo_unit_mix: z.array(condoUnitMixRow).describe("One row per unit type"),
+}).partial();
+
 export interface SchemaSection {
   /** Human-readable, used only in logs/prompts. */
   name: string;
@@ -383,6 +479,14 @@ export const ASSET_CLASS_SECTIONS = {
     { name: "land scalars", schema: landScalars },
     { name: "land planning", schema: landPlanning },
   ],
+  condo: [
+    { name: "condo site & acquisition", schema: condoSiteAcquisition },
+    { name: "condo development program", schema: condoProgram },
+    { name: "condo development costs", schema: condoCosts },
+    { name: "condo construction financing", schema: condoFinancing },
+    { name: "condo sales & absorption", schema: condoSales },
+    { name: "condo unit mix", schema: condoUnitMix },
+  ],
 } satisfies Record<AssetClass, SchemaSection[]>;
 
 // Whole-schema view (all sections merged) — used for coverage testing and
@@ -395,6 +499,7 @@ export const ASSET_CLASS_SCHEMAS = {
   industrial: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...industrialPhysical.shape, ...industrialLease.shape }),
   hospitality: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...hospitalitySpecific.shape }),
   land: z.object({ ...acquisitionAndReturns.shape, ...financingTerms.shape, ...operatingFinancials.shape, ...landScalars.shape, ...landPlanning.shape }),
+  condo: z.object({ ...condoSiteAcquisition.shape, ...condoProgram.shape, ...condoCosts.shape, ...condoFinancing.shape, ...condoSales.shape, ...condoUnitMix.shape }),
 } satisfies Record<AssetClass, z.ZodType>;
 
 export function getSchemaSectionsForAssetClass(assetClass: string): SchemaSection[] | undefined {

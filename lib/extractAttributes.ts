@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { query } from "@/lib/db";
 import { getSchemaSectionsForAssetClass } from "@/lib/attributeSchemas";
+import { withAnthropicRetry } from "@/lib/anthropic";
 
 const MODEL = "claude-opus-5";
 
@@ -100,18 +101,20 @@ export async function extractAttributesFromText(
   // section in the same upload.
   const sectionResults = await Promise.allSettled(
     sections.map(async (section) => {
-      const message = await client.messages.parse({
-        model: MODEL,
-        max_tokens: 8192,
-        system: EXTRACTION_SYSTEM_PROMPT,
-        thinking: { type: "adaptive" },
-        // "low" — this is bounded pattern-matching against an explicit
-        // schema, not open-ended reasoning, and it runs in parallel per
-        // upload inside a request with a hard duration ceiling (see the
-        // maxDuration comment in the API route) — "medium" measurably
-        // pushed real requests over that ceiling.
-        output_config: { effort: "low", format: zodOutputFormat(section.schema) },
-        messages: [{ role: "user", content: prompt }],
+      const message = await withAnthropicRetry(async () => {
+        return client.messages.parse({
+          model: MODEL,
+          max_tokens: 8192,
+          system: EXTRACTION_SYSTEM_PROMPT,
+          thinking: { type: "adaptive" },
+          // "low" — this is bounded pattern-matching against an explicit
+          // schema, not open-ended reasoning, and it runs in parallel per
+          // upload inside a request with a hard duration ceiling (see the
+          // maxDuration comment in the API route) — "medium" measurably
+          // pushed real requests over that ceiling.
+          output_config: { effort: "low", format: zodOutputFormat(section.schema) },
+          messages: [{ role: "user", content: prompt }],
+        });
       });
       return message.parsed_output;
     })

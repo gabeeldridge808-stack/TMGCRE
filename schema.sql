@@ -26,7 +26,7 @@ create table users (
 create table deals (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  asset_class text not null check (asset_class in ('multifamily', 'hospitality', 'land', 'office', 'retail', 'industrial')),
+  asset_class text not null check (asset_class in ('multifamily', 'hospitality', 'land', 'office', 'retail', 'industrial', 'condo')),
   stage text not null default 'sourcing' check (stage in ('sourcing', 'underwriting', 'diligence', 'closing', 'closed', 'dead')),
   owner text not null,
   created_at timestamptz not null default now(),

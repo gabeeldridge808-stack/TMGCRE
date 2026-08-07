@@ -7,6 +7,8 @@
 // model doesn't need to produce two different formats.
 import Anthropic from "@anthropic-ai/sdk";
 import type { UnderwritingResults } from "@/lib/underwritingModel";
+import type { CondoUnderwritingResults } from "@/lib/condoUnderwritingModel";
+import { withAnthropicRetry } from "@/lib/anthropic";
 
 const MODEL = "claude-opus-5";
 
@@ -45,12 +47,36 @@ export interface MemoComp {
   cap_rate: string | null;
 }
 
-/** Pure formatting — deal attributes + underwriting output + comps into one user turn. */
-export function buildMemoUserMessage(
-  deal: MemoDealContext,
-  underwriting: UnderwritingResults,
-  comps: MemoComp[]
-): string {
+/** Pure formatting of the income-property model's output for the memo prompt. */
+export function formatIncomeUnderwritingSummary(u: UnderwritingResults): string {
+  return `PRO FORMA UNDERWRITING (single-scenario income model, see the deal's Underwriting tab for assumptions):
+- Going-in cap rate: ${u.goingInCapRate.toFixed(2)}%
+- Total equity required: $${Math.round(u.equityRequired).toLocaleString()}
+- Loan amount: $${Math.round(u.loanAmount).toLocaleString()}
+- Year 1 DSCR: ${u.dscr !== null ? u.dscr.toFixed(2) + "x" : "n/a (no debt or missing financing terms)"}
+- Average cash-on-cash: ${u.averageCashOnCashPct.toFixed(2)}%
+- Unlevered IRR: ${u.unleveredIrrPct !== null ? u.unleveredIrrPct.toFixed(2) + "%" : "n/a"}
+- Levered IRR: ${u.leveredIrrPct !== null ? u.leveredIrrPct.toFixed(2) + "%" : "n/a"}
+- Equity multiple: ${u.equityMultiple.toFixed(2)}x
+- Projected exit sale price: $${Math.round(u.exitSalePrice).toLocaleString()}`;
+}
+
+/** Pure formatting of the condo-development model's output for the memo prompt. */
+export function formatCondoUnderwritingSummary(u: CondoUnderwritingResults): string {
+  return `DEVELOPMENT PRO FORMA (single-scenario build-and-sell model, see the deal's Underwriting tab for assumptions — this is a for-sale development, not an income-producing hold, so there is no cap rate or NOI):
+- Total development cost: $${Math.round(u.totalDevelopmentCost).toLocaleString()}
+- Construction loan: $${Math.round(u.constructionLoanAmount).toLocaleString()}
+- Equity required: $${Math.round(u.equityRequired).toLocaleString()}
+- Gross sellout: $${Math.round(u.grossSellout).toLocaleString()}
+- Net profit: $${Math.round(u.netProfit).toLocaleString()}
+- Profit margin on cost: ${u.profitMarginOnCostPct.toFixed(2)}%
+- Equity multiple: ${u.equityMultiple.toFixed(2)}x
+- Annualized project IRR: ${u.projectIrrPct !== null ? u.projectIrrPct.toFixed(2) + "%" : "n/a"}
+- Total project duration: ${u.totalProjectDurationMonths} months (construction + sales period)`;
+}
+
+/** Pure formatting — deal attributes + a pre-formatted underwriting summary + comps into one user turn. */
+export function buildMemoUserMessage(deal: MemoDealContext, underwritingSummary: string, comps: MemoComp[]): string {
   const attrLines = deal.attributes.length
     ? deal.attributes.map((a) => `- ${a.key}: ${JSON.stringify(a.value)}`).join("\n")
     : "(none recorded)";
@@ -76,30 +102,23 @@ Asset class: ${deal.assetClass} | Stage: ${deal.stage} | Owner: ${deal.owner}
 RECORDED ATTRIBUTES:
 ${attrLines}
 
-PRO FORMA UNDERWRITING (single-scenario model, see the deal's Underwriting tab for assumptions):
-- Going-in cap rate: ${underwriting.goingInCapRate.toFixed(2)}%
-- Total equity required: $${Math.round(underwriting.equityRequired).toLocaleString()}
-- Loan amount: $${Math.round(underwriting.loanAmount).toLocaleString()}
-- Year 1 DSCR: ${underwriting.dscr !== null ? underwriting.dscr.toFixed(2) + "x" : "n/a (no debt or missing financing terms)"}
-- Average cash-on-cash: ${underwriting.averageCashOnCashPct.toFixed(2)}%
-- Unlevered IRR: ${underwriting.unleveredIrrPct !== null ? underwriting.unleveredIrrPct.toFixed(2) + "%" : "n/a"}
-- Levered IRR: ${underwriting.leveredIrrPct !== null ? underwriting.leveredIrrPct.toFixed(2) + "%" : "n/a"}
-- Equity multiple: ${underwriting.equityMultiple.toFixed(2)}x
-- Projected exit sale price: $${Math.round(underwriting.exitSalePrice).toLocaleString()}
+${underwritingSummary}
 
 COMPARABLE SALES:
 ${compLines}`;
 }
 
-export async function streamIcMemo(deal: MemoDealContext, underwriting: UnderwritingResults, comps: MemoComp[]) {
-  const userContent = buildMemoUserMessage(deal, underwriting, comps);
+export async function streamIcMemo(deal: MemoDealContext, underwritingSummary: string, comps: MemoComp[]) {
+  const userContent = buildMemoUserMessage(deal, underwritingSummary, comps);
   const client = new Anthropic();
-  return client.messages.stream({
-    model: MODEL,
-    max_tokens: 8192,
-    system: [{ type: "text", text: IC_MEMO_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
-    messages: [{ role: "user", content: userContent }],
+  return withAnthropicRetry(async () => {
+    return client.messages.stream({
+      model: MODEL,
+      max_tokens: 8192,
+      system: [{ type: "text", text: IC_MEMO_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+      messages: [{ role: "user", content: userContent }],
+    });
   });
 }

@@ -8,6 +8,7 @@ import DealDocumentUpload from "./DealDocumentUpload";
 import AttributesSection from "./AttributesSection";
 import UnderwritingSummary from "./UnderwritingSummary";
 import UnderwritingTool from "./UnderwritingTool";
+import CondoUnderwritingTool from "./CondoUnderwritingTool";
 import DealTabs from "./DealTabs";
 import CompsImport from "./CompsImport";
 import CompsTable from "./CompsTable";
@@ -136,12 +137,15 @@ export default async function DealWorkspacePage({
     </div>
   );
 
-  const underwritingTab = (
-    <div>
-      <UnderwritingSummary attributes={attributes} />
-      <UnderwritingTool attributes={attributes} comps={comps} />
-    </div>
-  );
+  const underwritingTab =
+    deal.asset_class === "condo" ? (
+      <CondoUnderwritingTool attributes={attributes} />
+    ) : (
+      <div>
+        <UnderwritingSummary attributes={attributes} />
+        <UnderwritingTool attributes={attributes} comps={comps} />
+      </div>
+    );
 
   const compsTab = (
     <div>

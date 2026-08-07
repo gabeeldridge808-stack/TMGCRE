@@ -30,6 +30,7 @@ const GROUP_ORDER = [
   "Industrial",
   "Hospitality",
   "Land",
+  "Condo Development",
   "Other",
 ];
 

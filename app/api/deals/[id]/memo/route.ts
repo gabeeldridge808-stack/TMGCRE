@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { streamIcMemo, type MemoComp } from "@/lib/icMemo";
+import { streamIcMemo, formatIncomeUnderwritingSummary, formatCondoUnderwritingSummary, type MemoComp } from "@/lib/icMemo";
 import { DEFAULT_UNDERWRITING_INPUTS, deriveInputsFromAttributes, runUnderwritingModel } from "@/lib/underwritingModel";
+import {
+  DEFAULT_CONDO_UNDERWRITING_INPUTS,
+  deriveCondoInputsFromAttributes,
+  runCondoUnderwritingModel,
+} from "@/lib/condoUnderwritingModel";
 
 // Same reasoning as the extraction route: Opus 5 at high effort drafting a
 // multi-section memo can run well past a 60s ceiling.
@@ -41,14 +46,24 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     [id]
   );
 
-  const underwriting = runUnderwritingModel({
-    ...DEFAULT_UNDERWRITING_INPUTS,
-    ...deriveInputsFromAttributes(attributes),
-  });
+  const underwritingSummary =
+    deal.asset_class === "condo"
+      ? formatCondoUnderwritingSummary(
+          runCondoUnderwritingModel({
+            ...DEFAULT_CONDO_UNDERWRITING_INPUTS,
+            ...deriveCondoInputsFromAttributes(attributes),
+          })
+        )
+      : formatIncomeUnderwritingSummary(
+          runUnderwritingModel({
+            ...DEFAULT_UNDERWRITING_INPUTS,
+            ...deriveInputsFromAttributes(attributes),
+          })
+        );
 
   const stream = await streamIcMemo(
     { name: deal.name, assetClass: deal.asset_class, stage: deal.stage, owner: deal.owner, attributes },
-    underwriting,
+    underwritingSummary,
     comps
   );
 
