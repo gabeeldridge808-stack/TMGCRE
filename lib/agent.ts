@@ -24,7 +24,9 @@ Read between the lines of what's in front of you. Don't just answer the literal 
 
 Answer directly first, then support it. Lead with the number, the verdict, or the direct answer to what was asked, in the first sentence or two — then the reasoning and caveats. Use structure (short headers, bullets) when covering several distinct points; use plain prose for a single direct answer. Don't pad with boilerplate disclaimers or restate the question back.
 
-You're talking to the person doing the deal, not writing a report for a committee that's never seen it. Skip the definitions of standard CRE terms (cap rate, NOI, DSCR, WALT) unless asked to explain one specifically. Bring asset-class-specific framing to bear without being told to — unit mix and turnover for multifamily, RevPAR/ADR/STR comp set for hospitality, entitlement status and absorption for land, WALT and tenant credit for office/retail/industrial.`;
+You're talking to the person doing the deal, not writing a report for a committee that's never seen it. Skip the definitions of standard CRE terms (cap rate, NOI, DSCR, WALT) unless asked to explain one specifically. Bring asset-class-specific framing to bear without being told to — unit mix and turnover for multifamily, RevPAR/ADR/STR comp set for hospitality, entitlement status and absorption for land, WALT and tenant credit for office/retail/industrial.
+
+You can propose recording or correcting a deal attribute with the propose_attribute_update tool. Use it only when you have a specific, well-sourced value — the user just told you a fact directly, or you found it stated explicitly in a retrieved document excerpt. Never propose your own estimate, a rounded guess, or a value inferred from a general assumption. This does not write anything by itself — it surfaces a proposal the user has to accept, so it's fine to propose something even if you're not 100% sure, as long as you say what you're basing it on and let them judge it. State the reasoning as a direct citation ("the OM states X on page Y" or "you just told me X"), not a vague justification.`;
 
 export interface RetrievedChunk {
   source_filename: string;
@@ -51,6 +53,37 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+// A client tool, not a server-executed one like web_search — Claude calling
+// this doesn't write anything by itself. The route handler pulls the
+// proposed {key, value, reasoning} out of the stream and hands it to the
+// client as a proposal card; only a user clicking "Accept" actually writes
+// to deal_attributes (see app/api/deals/[id]/attributes/confirm/route.ts).
+// That gap is deliberate — an agent silently overwriting a number a human
+// entered, based on a misread document or a hallucinated fact, is a worse
+// failure mode than making the analyst click a button.
+export const PROPOSE_ATTRIBUTE_UPDATE_TOOL = {
+  name: "propose_attribute_update",
+  description:
+    "Propose recording or correcting a value in this deal's attributes. Does not write anything directly -- surfaces a proposal for the user to accept or reject. Only call this with a specific, well-sourced value (something the user just told you, or something a retrieved document excerpt explicitly states) -- never an estimate or a guess.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      key: {
+        type: "string",
+        description: "The attribute key, e.g. purchase_price, noi, unit_count, closing_date",
+      },
+      value: {
+        description: "The proposed value (a number, string, or boolean depending on the field)",
+      },
+      reasoning: {
+        type: "string",
+        description: "Why you're proposing this, citing the source directly (a document + page, or what the user said)",
+      },
+    },
+    required: ["key", "value", "reasoning"],
+  },
+};
 
 /** Embed the question and pull the deal's most relevant indexed chunks. */
 export async function retrieveContext(
@@ -121,7 +154,7 @@ export async function streamDealAgentAnswer(
       ],
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }, PROPOSE_ATTRIBUTE_UPDATE_TOOL],
       messages: [...history, { role: "user", content: userContent }],
     });
   });

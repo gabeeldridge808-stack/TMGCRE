@@ -29,6 +29,10 @@ create table deals (
   asset_class text not null check (asset_class in ('multifamily', 'hospitality', 'land', 'office', 'retail', 'industrial', 'condo')),
   stage text not null default 'sourcing' check (stage in ('sourcing', 'underwriting', 'diligence', 'closing', 'closed', 'dead')),
   owner text not null,
+  -- Set by scripts/ingest.ts the first time a Drive folder is linked
+  -- (via --deal-id + --drive-folder-id), so a later `--all` run knows
+  -- which deals to re-sync without having to pass every folder id again.
+  drive_folder_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -54,6 +58,21 @@ create table audit_log (
 
 create index audit_log_deal_id_idx on audit_log (deal_id);
 
+-- "Ask the deal" chat history. Previously lived only in the browser tab's
+-- React state — a refresh lost the conversation. One row per turn (both
+-- the user's question and the assistant's full answer), replayed in order
+-- to reseed the chat UI on page load and to give the agent proposal flow
+-- (lib/agent.ts) something to reference across turns server-side too.
+create table chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid not null references deals(id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+create index chat_messages_deal_id_idx on chat_messages (deal_id);
+
 -- Type-specific fields, one row per (deal, attribute). jsonb `value` lets
 -- each asset class define its own attribute set without a schema migration.
 create table deal_attributes (
@@ -61,6 +80,12 @@ create table deal_attributes (
   deal_id uuid not null references deals(id) on delete cascade,
   key text not null,
   value jsonb not null,
+  -- Where this value came from: a source filename for an extracted
+  -- attribute, 'manual' for one typed into the Edit form / API, 'chat
+  -- agent' for one confirmed through a chat proposal, or null for rows
+  -- written before this column existed. Purely provenance, never used to
+  -- gate behavior.
+  source text,
   updated_at timestamptz not null default now(),
   unique (deal_id, key)
 );

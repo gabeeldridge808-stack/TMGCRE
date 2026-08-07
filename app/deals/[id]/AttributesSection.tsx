@@ -1,9 +1,9 @@
-import { groupAttributesForDisplay, formatScalar, isRowShaped, rowTableColumns } from "@/lib/attributeDisplay";
+import { groupAttributesForDisplay, formatScalar, formatSource, isRowShaped, rowTableColumns } from "@/lib/attributeDisplay";
 
 export default function AttributesSection({
   attributes,
 }: {
-  attributes: { key: string; value: unknown }[];
+  attributes: { key: string; value: unknown; source?: string | null }[];
 }) {
   if (attributes.length === 0) {
     return <p className="text-muted">No type-specific attributes recorded yet.</p>;
@@ -29,6 +29,11 @@ export default function AttributesSection({
                 <div key={item.key} style={{ fontSize: 14 }}>
                   <dt style={{ fontWeight: 600, display: "inline" }}>{item.label}: </dt>
                   <dd style={{ display: "inline", margin: 0 }}>{formatScalar(item.value, item.unit)}</dd>
+                  {formatSource(item.source) && (
+                    <span className="text-faint" style={{ marginLeft: 6 }}>
+                      ({formatSource(item.source)})
+                    </span>
+                  )}
                 </div>
               )
             )}

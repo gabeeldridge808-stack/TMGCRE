@@ -11,8 +11,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const attributes = await query<{ key: string; value: unknown }>(
-    `select key, value from deal_attributes where deal_id = $1 order by key`,
+  const attributes = await query<{ key: string; value: unknown; source: string | null }>(
+    `select key, value, source from deal_attributes where deal_id = $1 order by key`,
     [id]
   );
 
@@ -21,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       field: FIELD_META[a.key]?.label ?? a.key,
       key: a.key,
       value: typeof a.value === "object" ? JSON.stringify(a.value) : String(a.value),
+      source: a.source ?? "",
     }))
   );
 

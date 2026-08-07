@@ -13,7 +13,8 @@ export type AuditAction =
   | "deal.deleted"
   | "document.uploaded"
   | "comps.imported"
-  | "comps.deleted";
+  | "comps.deleted"
+  | "attribute.confirmed_via_chat";
 
 export interface AuditLogEntry {
   dealId?: string | null;
@@ -35,6 +36,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "document.uploaded": "uploaded a document",
   "comps.imported": "imported comps",
   "comps.deleted": "deleted a comp",
+  "attribute.confirmed_via_chat": "confirmed a chat-proposed attribute",
 };
 
 /** Pure: human-readable label for an audit action, falling back to the raw string for forward-compat with an action added later. */

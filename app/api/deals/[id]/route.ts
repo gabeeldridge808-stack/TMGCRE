@@ -80,9 +80,9 @@ export async function PATCH(
   if (attributes && typeof attributes === "object") {
     for (const [key, value] of Object.entries(attributes)) {
       await query(
-        `insert into deal_attributes (deal_id, key, value)
-         values ($1, $2, $3)
-         on conflict (deal_id, key) do update set value = excluded.value, updated_at = now()`,
+        `insert into deal_attributes (deal_id, key, value, source)
+         values ($1, $2, $3, 'manual')
+         on conflict (deal_id, key) do update set value = excluded.value, source = 'manual', updated_at = now()`,
         [id, key, JSON.stringify(value)]
       );
     }

@@ -163,6 +163,15 @@ over everything it just processed and writes any structured fields it finds
 `deal_attributes` — see the architecture note above. This step is skipped
 on `--dry-run`, same as embeddings.
 
+The `--deal-id`/`--drive-folder-id` pair also links that deal to that
+folder (`deals.drive_folder_id`), so a later run can re-sync every linked
+deal in one pass without repeating every folder id:
+
+```
+npm run ingest -- --all --dry-run
+npm run ingest -- --all
+```
+
 ## Verifying retrieval
 
 ```
@@ -246,17 +255,11 @@ same `DATABASE_URL` as production.
 - **PDF page numbers only.** `documents.page_number` is populated for PDFs;
   docx and Google Docs have no reliable page concept at extraction time, so
   it's `null` for those.
-- **One deal at a time.** `scripts/ingest.ts` takes a single `--deal-id` /
-  `--drive-folder-id` pair by design — generalizing to a loop over all
-  deals is a deliberate next step, not done yet.
-- **The chat agent has no memory across sessions and can't write.** Message
-  history lives in the browser tab, not the database, so a refresh loses the
-  conversation. It also can't write to `deal_attributes` or
-  `deal_checklist_items` mid-chat, or pull from a dedicated comps/data API —
-  only the batch extraction step at ingest time writes anything.
-- **Attribute extraction has no confidence/provenance trail.** A written
-  attribute records which document it came from in the console log at
-  ingest time, but that source isn't persisted alongside the value in
-  `deal_attributes` — the table only has `(key, value)`, same as
-  human-entered attributes. If mis-extractions turn out to be a real
-  problem, that's the first schema change to make.
+- **The chat agent can propose attribute changes but not checklist changes.**
+  `propose_attribute_update` (see `lib/agent.ts`) lets the agent surface a
+  suggested `deal_attributes` value for a human to accept or reject
+  mid-conversation — it never writes directly. There's no equivalent yet
+  for toggling `deal_checklist_items` from chat.
+- **Chat history has no per-user isolation.** It's one shared conversation
+  per deal (`chat_messages`), consistent with how attributes/comps/the
+  audit log already work in this app, not a private thread per person.

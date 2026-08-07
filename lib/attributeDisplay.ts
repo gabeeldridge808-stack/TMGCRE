@@ -10,6 +10,7 @@ export interface DisplayAttribute {
   label: string;
   unit?: FieldMeta["unit"];
   value: unknown;
+  source?: string | null;
 }
 
 export interface AttributeGroup {
@@ -35,7 +36,7 @@ const GROUP_ORDER = [
 ];
 
 export function groupAttributesForDisplay(
-  attributes: { key: string; value: unknown }[]
+  attributes: { key: string; value: unknown; source?: string | null }[]
 ): AttributeGroup[] {
   const byGroup = new Map<string, DisplayAttribute[]>();
 
@@ -44,7 +45,7 @@ export function groupAttributesForDisplay(
     const group = meta?.group ?? "Other";
     const label = meta?.label ?? attr.key;
     if (!byGroup.has(group)) byGroup.set(group, []);
-    byGroup.get(group)!.push({ key: attr.key, label, unit: meta?.unit, value: attr.value });
+    byGroup.get(group)!.push({ key: attr.key, label, unit: meta?.unit, value: attr.value, source: attr.source });
   }
 
   const groups: AttributeGroup[] = [];
@@ -88,6 +89,14 @@ export function formatScalar(value: unknown, unit?: FieldMeta["unit"]): string {
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+/** Pure: turns a deal_attributes.source value into a short human caption, or null to show nothing. */
+export function formatSource(source: string | null | undefined): string | null {
+  if (!source) return null;
+  if (source === "manual") return "entered manually";
+  if (source === "chat agent") return "confirmed via chat";
+  return `from ${source}`;
 }
 
 /** Column headers for a row-shaped value — the union of keys across all rows, in first-seen order. */

@@ -144,11 +144,11 @@ export async function writeNewAttributes(
   const results: { key: string; inserted: boolean }[] = [];
   for (const attr of attributes) {
     const rows = await query<{ key: string }>(
-      `insert into deal_attributes (deal_id, key, value)
-       values ($1, $2, $3)
+      `insert into deal_attributes (deal_id, key, value, source)
+       values ($1, $2, $3, $4)
        on conflict (deal_id, key) do nothing
        returning key`,
-      [dealId, attr.key, JSON.stringify(attr.value)]
+      [dealId, attr.key, JSON.stringify(attr.value), attr.source_filename]
     );
     results.push({ key: attr.key, inserted: rows.length > 0 });
   }

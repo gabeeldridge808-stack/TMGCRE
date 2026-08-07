@@ -1,6 +1,13 @@
 // Document ingestion CLI.
 //
 //   npx tsx scripts/ingest.ts --deal-id <uuid> --drive-folder-id <id> [--dry-run]
+//   npx tsx scripts/ingest.ts --all [--dry-run]
+//
+// The first form ingests one deal and also links it to that Drive folder
+// (deals.drive_folder_id) for next time. --all re-syncs every deal that's
+// already linked this way — previously this script only supported one
+// deal per invocation; generalizing it to a batch mode was a deliberate,
+// separate next step, and this is that step.
 //
 // --dry-run extracts and chunks every file but skips embeddings + DB writes.
 // Run this first against a real deal's Drive folder to see what breaks on
@@ -16,8 +23,9 @@ import { writeDocumentChunks } from "../lib/documents";
 import { extractAttributesFromText, writeNewAttributes, type SourceDocument } from "../lib/extractAttributes";
 
 interface Args {
-  dealId: string;
-  driveFolderId: string;
+  all: boolean;
+  dealId?: string;
+  driveFolderId?: string;
   dryRun: boolean;
 }
 
@@ -28,16 +36,28 @@ function parseArgs(): Args {
     return i === -1 ? undefined : args[i + 1];
   };
 
+  const all = args.includes("--all");
   const dealId = get("--deal-id");
   const driveFolderId = get("--drive-folder-id");
   const dryRun = args.includes("--dry-run");
 
+  if (all) {
+    if (dealId || driveFolderId) {
+      console.error("--all can't be combined with --deal-id / --drive-folder-id.");
+      process.exit(1);
+    }
+    return { all, dryRun };
+  }
+
   if (!dealId || !driveFolderId) {
-    console.error("Usage: ingest.ts --deal-id <uuid> --drive-folder-id <id> [--dry-run]");
+    console.error(
+      "Usage: ingest.ts --deal-id <uuid> --drive-folder-id <id> [--dry-run]\n" +
+        "       ingest.ts --all [--dry-run]  (re-syncs every deal already linked to a folder)"
+    );
     process.exit(1);
   }
 
-  return { dealId, driveFolderId, dryRun };
+  return { all, dealId, driveFolderId, dryRun };
 }
 
 async function prepareFile(file: DriveFile): Promise<ExtractedPage[] | { skipped: string }> {
@@ -58,18 +78,8 @@ async function prepareFile(file: DriveFile): Promise<ExtractedPage[] | { skipped
   return pages;
 }
 
-async function main() {
-  const { dealId, driveFolderId, dryRun } = parseArgs();
-
-  const [deal] = await query<{ id: string; asset_class: string }>(
-    `select id, asset_class from deals where id = $1`,
-    [dealId]
-  );
-  if (!deal) {
-    console.error(`No deal found with id ${dealId}`);
-    process.exit(1);
-  }
-
+/** Ingests one deal's Drive folder. Used both for a single --deal-id run and for each deal in an --all run. */
+async function ingestDeal(dealId: string, assetClass: string, driveFolderId: string, dryRun: boolean): Promise<void> {
   console.log(`Listing files under Drive folder ${driveFolderId}...`);
   const files = await listFilesInFolder(driveFolderId);
   console.log(`Found ${files.length} file(s).\n`);
@@ -132,7 +142,7 @@ async function main() {
       [dealId]
     );
     const found = await extractAttributesFromText(
-      deal.asset_class,
+      assetClass,
       existing.map((e) => e.key),
       sourceDocuments
     );
@@ -150,7 +160,44 @@ async function main() {
       console.log(`  ${inserted.length} attribute(s) added.`);
     }
   }
+}
 
+async function main() {
+  const args = parseArgs();
+
+  if (args.all) {
+    const deals = await query<{ id: string; name: string; asset_class: string; drive_folder_id: string }>(
+      `select id, name, asset_class, drive_folder_id from deals where drive_folder_id is not null order by name`
+    );
+    if (deals.length === 0) {
+      console.log("No deals are linked to a Drive folder yet — run with --deal-id/--drive-folder-id first.");
+      process.exit(0);
+    }
+    console.log(`Re-syncing ${deals.length} linked deal(s)...\n`);
+    for (const deal of deals) {
+      console.log(`=== ${deal.name} (${deal.id}) ===`);
+      await ingestDeal(deal.id, deal.asset_class, deal.drive_folder_id, args.dryRun);
+      console.log("");
+    }
+    process.exit(0);
+  }
+
+  const { dealId, driveFolderId, dryRun } = args as Required<Pick<Args, "dealId" | "driveFolderId">> & Args;
+
+  const [deal] = await query<{ id: string; asset_class: string }>(
+    `select id, asset_class from deals where id = $1`,
+    [dealId]
+  );
+  if (!deal) {
+    console.error(`No deal found with id ${dealId}`);
+    process.exit(1);
+  }
+
+  if (!dryRun) {
+    await query(`update deals set drive_folder_id = $2 where id = $1`, [dealId, driveFolderId]);
+  }
+
+  await ingestDeal(dealId, deal.asset_class, driveFolderId, dryRun);
   process.exit(0);
 }
 

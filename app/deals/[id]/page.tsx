@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
 import { titleCase, STAGE_BADGE_VARIANT, type Stage } from "@/lib/dealConstants";
 import { ensureChecklistForStage } from "@/lib/checklist";
+import { FIELD_META } from "@/lib/attributeSchemas";
 import Badge from "@/app/Badge";
 import DealChat from "./DealChat";
 import DealDocumentUpload from "./DealDocumentUpload";
@@ -30,6 +31,7 @@ interface Deal {
 interface DealAttribute {
   key: string;
   value: unknown;
+  source: string | null;
 }
 
 interface DocumentFile {
@@ -71,7 +73,7 @@ export default async function DealWorkspacePage({
   await ensureChecklistForStage(deal.id, deal.stage);
 
   const attributes = await query<DealAttribute>(
-    `select key, value from deal_attributes where deal_id = $1 order by key`,
+    `select key, value, source from deal_attributes where deal_id = $1 order by key`,
     [id]
   );
 
@@ -103,6 +105,16 @@ export default async function DealWorkspacePage({
     [id]
   );
 
+  const chatMessages = await query<{ role: "user" | "assistant"; content: string }>(
+    `select role, content from chat_messages where deal_id = $1 order by created_at asc`,
+    [id]
+  );
+
+  // Plain data, not the FIELD_META objects themselves — DealChat is a
+  // client component, and passing this as a prop keeps lib/attributeSchemas.ts
+  // (Zod + every asset class's schema) out of its bundle entirely.
+  const fieldLabels = Object.fromEntries(Object.entries(FIELD_META).map(([key, meta]) => [key, meta.label]));
+
   const overviewTab = (
     <div>
       <ChecklistSection dealId={deal.id} stage={deal.stage} items={checklistItems} />
@@ -133,7 +145,7 @@ export default async function DealWorkspacePage({
         <code>npm run ingest -- --deal-id {deal.id} --drive-folder-id &lt;folder-id&gt;</code>.
       </p>
 
-      <DealChat dealId={deal.id} />
+      <DealChat dealId={deal.id} initialMessages={chatMessages} fieldLabels={fieldLabels} />
     </div>
   );
 
